@@ -21,12 +21,14 @@ class IndexingJobWorkerTest {
     UUID id = UUID.randomUUID();
     when(jobs.markProcessing(id)).thenReturn(true);
     when(jobs.get(id)).thenReturn(Optional.of(
-        new IndexingJob(id, "embedding-reindex", null, null, "PROCESSING", 0, null, "REEMBED")));
-    when(ragService.reindexMissingEmbeddings()).thenReturn(new ReindexResponse(39));
+        new IndexingJob(id, "embedding-reindex", null, null, "PROCESSING", 0, null, "REEMBED",
+            WorkspaceAccessService.LEGACY_WORKSPACE_ID)));
+    when(ragService.reindexMissingEmbeddings(WorkspaceAccessService.LEGACY_WORKSPACE_ID))
+        .thenReturn(new ReindexResponse(39));
 
     worker.process(id);
 
-    verify(ragService).reindexMissingEmbeddings();
+    verify(ragService).reindexMissingEmbeddings(WorkspaceAccessService.LEGACY_WORKSPACE_ID);
     verify(jobs).complete(id, 39);
   }
 }

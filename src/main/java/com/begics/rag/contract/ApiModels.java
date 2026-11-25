@@ -18,4 +18,6 @@ public final class ApiModels {
   public record QueryRequest(@NotBlank @Size(max = 10_000) String question) {}
   public record SourceReference(String documentId, String source, int chunk) {}
   public record QueryResponse(String answer, List<SourceReference> sources) {}
+  public record WorkspaceRequest(@NotBlank @Size(max = 120) String name) {}
+  public record WorkspaceMemberRequest(@NotBlank @Size(max = 200) String subject) {}
 }

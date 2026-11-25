@@ -1,9 +1,11 @@
 package com.begics.rag.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.begics.rag.contract.ApiModels.SourceReference;
 import com.begics.rag.domain.RetrievedChunk;
+import com.begics.rag.service.WorkspaceAccessService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -18,6 +20,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -67,6 +70,31 @@ class JdbcDocumentStoreIntegrationTest {
             new SourceReference(firstId, "notes.txt", 0),
             new SourceReference(secondId, "other.txt", 0),
             new SourceReference(firstId, "notes.txt", 1));
+  }
+
+  @Test
+  void isolatesRetrievalAndReembeddingBetweenWorkspaces() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    JdbcTemplate jdbc = jdbc();
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", firstWorkspace, "First");
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", secondWorkspace, "Second");
+    store.save(firstWorkspace, "private.txt", List.of("private workspace token"),
+        List.of(vector(1, 0)), "test-model", null);
+    String secondDocumentId = store.save(secondWorkspace, "other.txt", List.of("other workspace token"),
+        List.of(vector(0, 1)), "old-model", null);
+
+    assertThat(store.search(firstWorkspace, "other workspace token", vector(0, 1), "test-model", 5))
+        .extracting(RetrievedChunk::source)
+        .doesNotContain("other.txt");
+    List<DocumentStore.ChunkToEmbed> stale = store.findChunksWithStaleEmbeddings(firstWorkspace, "new-model", 10);
+    assertThat(stale).extracting(DocumentStore.ChunkToEmbed::content)
+        .containsExactly("private workspace token");
+    store.updateEmbedding(firstWorkspace, stale.getFirst().id(), vector(1, 0), "new-model");
+    assertThat(jdbc.queryForObject("""
+        select embedding_model from chunks c join documents d on d.id = c.document_id
+         where d.id = ?::uuid
+        """, String.class, secondDocumentId)).isEqualTo("old-model");
   }
 
   @Test
@@ -215,10 +243,12 @@ class JdbcDocumentStoreIntegrationTest {
   void indexingJobStorePersistsStatusAndAllowsRecovery() {
     IndexingJobStore jobs = new IndexingJobStore(jdbc());
     IndexingJobStore.IndexingJob created = jobs.create(
-        "job-source.txt", null, "content for indexing");
-    IndexingJobStore.IndexingJob reembed = jobs.createReembed();
+        JdbcDocumentStore.LEGACY_WORKSPACE_ID, "job-source.txt", null, "content for indexing");
+    IndexingJobStore.IndexingJob reembed = jobs.createReembed(JdbcDocumentStore.LEGACY_WORKSPACE_ID);
 
     assertThat(created.status()).isEqualTo("QUEUED");
+    assertThat(jobs.get(created.id(), UUID.randomUUID())).isEmpty();
+    assertThat(jobs.get(created.id(), JdbcDocumentStore.LEGACY_WORKSPACE_ID)).isPresent();
     assertThat(reembed.jobType()).isEqualTo("REEMBED");
     assertThat(reembed.objectKey()).isNull();
     assertThat(reembed.content()).isNull();
@@ -234,6 +264,27 @@ class JdbcDocumentStoreIntegrationTest {
     jobs.complete(reembed.id(), 39);
     assertThat(jobs.get(reembed.id()).orElseThrow().status()).isEqualTo("COMPLETED");
     assertThat(jobs.get(reembed.id()).orElseThrow().chunks()).isEqualTo(39);
+  }
+
+  @Test
+  void provisionsPrivateWorkspacesAndEnforcesExplicitMembership() {
+    WorkspaceAccessService access = new WorkspaceAccessService(jdbc());
+    var alice = new TestingAuthenticationToken("alice-sub", null, "ROLE_USER");
+    var bob = new TestingAuthenticationToken("bob-sub", null, "ROLE_USER");
+
+    UUID aliceWorkspace = access.resolve(alice, null);
+    UUID bobWorkspace = access.resolve(bob, null);
+    assertThat(aliceWorkspace).isNotEqualTo(bobWorkspace);
+    assertThatThrownBy(() -> access.resolve(bob, aliceWorkspace.toString()))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Workspace access denied");
+
+    var shared = access.create(alice, "Team");
+    assertThat(access.addMember(alice, shared.id(), "bob-sub").role()).isEqualTo("MEMBER");
+    assertThat(access.resolve(bob, shared.id().toString())).isEqualTo(shared.id());
+    access.removeMember(alice, shared.id(), "bob-sub");
+    assertThatThrownBy(() -> access.resolve(bob, shared.id().toString()))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
   }
 
   private JdbcTemplate jdbc() {

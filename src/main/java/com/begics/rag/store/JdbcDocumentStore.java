@@ -12,19 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class JdbcDocumentStore implements DocumentStore {
   private static final int RRF_CONSTANT = 60;
+  static final UUID LEGACY_WORKSPACE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
   private final JdbcTemplate jdbc;
   public JdbcDocumentStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
   @Override
   @Transactional
-  public String save(
-      String source, List<String> chunks, List<float[]> embeddings, String embeddingModel, UUID documentId) {
+  public String save(UUID workspaceId, String source, List<String> chunks, List<float[]> embeddings,
+      String embeddingModel, UUID documentId) {
     if (chunks.size() != embeddings.size()) {
       throw new IllegalArgumentException("Each chunk must have exactly one embedding");
     }
     String id = documentId == null ? UUID.randomUUID().toString() : documentId.toString();
-    jdbc.update("insert into documents(id, source) values (?::uuid, ?) on conflict (id) do update set source = excluded.source",
-        id, source);
+    jdbc.update("""
+        insert into documents(id, source, workspace_id) values (?::uuid, ?, ?)
+        on conflict (id) do update set source = excluded.source, workspace_id = excluded.workspace_id
+        """, id, source, workspaceId);
     jdbc.update("delete from chunks where document_id = ?::uuid", id);
     for (int i = 0; i < chunks.size(); i++) {
       jdbc.update("""
@@ -35,23 +38,29 @@ public class JdbcDocumentStore implements DocumentStore {
     return id;
   }
 
+  public String save(
+      String source, List<String> chunks, List<float[]> embeddings, String embeddingModel, UUID documentId) {
+    return save(LEGACY_WORKSPACE_ID, source, chunks, embeddings, embeddingModel, documentId);
+  }
+
   @Override
-  public List<RetrievedChunk> search(String query, float[] embedding, String embeddingModel, int limit) {
+  public List<RetrievedChunk> search(
+      UUID workspaceId, String query, float[] embedding, String embeddingModel, int limit) {
     List<RetrievedChunk> vectorMatches = jdbc.query("""
         select d.id::text, d.source, c.chunk_no, c.content,
                1 - (c.embedding <=> ?::halfvec) as score
           from chunks c join documents d on d.id = c.document_id
-         where c.embedding is not null and c.embedding_model = ?
+         where c.embedding is not null and c.embedding_model = ? and d.workspace_id = ?
          order by c.embedding <=> ?::halfvec limit ?
-        """, this::mapChunk, vector(embedding), embeddingModel, vector(embedding), limit);
+        """, this::mapChunk, vector(embedding), embeddingModel, workspaceId, vector(embedding), limit);
     List<RetrievedChunk> textMatches = jdbc.query("""
         select d.id::text, d.source, c.chunk_no, c.content,
                ts_rank_cd(c.search_vector, plainto_tsquery('simple', ?)) as score
           from chunks c join documents d on d.id = c.document_id
-         where c.search_vector @@ plainto_tsquery('simple', ?)
+         where c.search_vector @@ plainto_tsquery('simple', ?) and d.workspace_id = ?
          order by score desc, c.id
          limit ?
-        """, this::mapChunk, query, query, limit);
+        """, this::mapChunk, query, query, workspaceId, limit);
 
     Map<String, RankedChunk> fused = new LinkedHashMap<>();
     addRankedMatches(fused, vectorMatches);
@@ -63,23 +72,39 @@ public class JdbcDocumentStore implements DocumentStore {
         .toList();
   }
 
-  @Override
-  public List<ChunkToEmbed> findChunksWithStaleEmbeddings(String embeddingModel, int limit) {
-    return jdbc.query("""
-        select id, content from chunks
-         where embedding is null or embedding_model is distinct from ?
-         order by id
-         limit ?
-        """, (rs, row) -> new ChunkToEmbed(rs.getLong(1), rs.getString(2)), embeddingModel, limit);
+  public List<RetrievedChunk> search(String query, float[] embedding, String embeddingModel, int limit) {
+    return search(LEGACY_WORKSPACE_ID, query, embedding, embeddingModel, limit);
   }
 
   @Override
-  public void updateEmbedding(long chunkId, float[] embedding, String embeddingModel) {
-    int updated = jdbc.update("update chunks set embedding = ?::halfvec, embedding_model = ? where id = ?",
-        vector(embedding), embeddingModel, chunkId);
+  public List<ChunkToEmbed> findChunksWithStaleEmbeddings(
+      UUID workspaceId, String embeddingModel, int limit) {
+    return jdbc.query("""
+        select c.id, c.content from chunks c join documents d on d.id = c.document_id
+         where d.workspace_id = ? and (c.embedding is null or c.embedding_model is distinct from ?)
+         order by c.id
+         limit ?
+        """, (rs, row) -> new ChunkToEmbed(rs.getLong(1), rs.getString(2)), workspaceId, embeddingModel, limit);
+  }
+
+  public List<ChunkToEmbed> findChunksWithStaleEmbeddings(String embeddingModel, int limit) {
+    return findChunksWithStaleEmbeddings(LEGACY_WORKSPACE_ID, embeddingModel, limit);
+  }
+
+  @Override
+  public void updateEmbedding(UUID workspaceId, long chunkId, float[] embedding, String embeddingModel) {
+    int updated = jdbc.update("""
+        update chunks c set embedding = ?::halfvec, embedding_model = ?
+          from documents d
+         where c.document_id = d.id and d.workspace_id = ? and c.id = ?
+        """, vector(embedding), embeddingModel, workspaceId, chunkId);
     if (updated != 1) {
       throw new IllegalStateException("Expected to update one embedding for chunk " + chunkId);
     }
+  }
+
+  public void updateEmbedding(long chunkId, float[] embedding, String embeddingModel) {
+    updateEmbedding(LEGACY_WORKSPACE_ID, chunkId, embedding, embeddingModel);
   }
 
   private RetrievedChunk mapChunk(java.sql.ResultSet rs, int row) throws java.sql.SQLException {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import com.begics.rag.contract.ApiModels.IndexingJobResponse;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.IndexingJobService;
+import com.begics.rag.service.WorkspaceAccessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,7 +24,8 @@ import org.mockito.Mockito;
 class RagControllerTest {
   private final RagService service = Mockito.mock(RagService.class);
   private final IndexingJobService indexingJobs = Mockito.mock(IndexingJobService.class);
-  private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new RagController(service, indexingJobs))
+  private final WorkspaceAccessService workspaces = Mockito.mock(WorkspaceAccessService.class);
+  private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new RagController(service, indexingJobs, workspaces))
       .setControllerAdvice(new ValidationAdvice()).build();
 
   @Test
@@ -56,11 +58,13 @@ class RagControllerTest {
 
   @Test
   void exposesTheEmbeddingReindexOperation() throws Exception {
-    when(indexingJobs.enqueueReembed())
+    UUID workspaceId = UUID.randomUUID();
+    when(workspaces.resolve(Mockito.any(), Mockito.any())).thenReturn(workspaceId);
+    when(indexingJobs.enqueueReembed(workspaceId))
         .thenReturn(new IndexingJobResponse(UUID.randomUUID(), "QUEUED", 0, null));
     mvc.perform(post("/api/documents/reindex-embeddings"))
         .andExpect(status().isAccepted());
-    verify(indexingJobs).enqueueReembed();
+    verify(indexingJobs).enqueueReembed(workspaceId);
   }
 
   @RestControllerAdvice

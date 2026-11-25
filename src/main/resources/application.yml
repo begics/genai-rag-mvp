@@ -13,9 +13,36 @@ spring:
     enabled: true
     placeholders:
       embeddingDimensions: 1536
-app.security:
-  username: ${APP_USERNAME}
-  password: ${APP_PASSWORD}
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: ${KEYCLOAK_CLIENT_ID:rag-assistant}
+            client-authentication-method: none
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,profile,email
+        provider:
+          keycloak:
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/rag}
+            authorization-uri: ${KEYCLOAK_AUTHORIZATION_URI:http://localhost:8180/realms/rag/protocol/openid-connect/auth}
+            token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8180/realms/rag/protocol/openid-connect/token}
+            user-info-uri: ${KEYCLOAK_USER_INFO_URI:http://localhost:8180/realms/rag/protocol/openid-connect/userinfo}
+            jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/rag/protocol/openid-connect/certs}
+            end-session-uri: ${KEYCLOAK_END_SESSION_URI:http://localhost:8180/realms/rag/protocol/openid-connect/logout}
+            user-name-attribute: sub
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/rag}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/rag/protocol/openid-connect/certs}
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
 app.s3:
   endpoint: ${S3_ENDPOINT:http://localhost:9000}
   region: ${S3_REGION:us-east-1}

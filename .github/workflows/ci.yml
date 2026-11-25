@@ -26,8 +26,9 @@ jobs:
           cat > .env <<'EOF'
           DATABASE_USERNAME=rag
           DATABASE_PASSWORD=ci-database-password
-          APP_USERNAME=rag
-          APP_PASSWORD=ci-app-password
+          KEYCLOAK_ADMIN_USERNAME=admin
+          KEYCLOAK_ADMIN_PASSWORD=ci-keycloak-password
+          KEYCLOAK_PUBLIC_URL=http://localhost:8180
           S3_ACCESS_KEY=ci-access-key
           S3_SECRET_KEY=ci-storage-password
           S3_REGION=us-east-1

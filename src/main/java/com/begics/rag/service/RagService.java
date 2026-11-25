@@ -8,6 +8,7 @@ import com.begics.rag.model.Reranker;
 import com.begics.rag.store.DocumentStore;
 import com.begics.rag.storage.S3DocumentReader;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,12 +32,13 @@ public class RagService {
     this.s3DocumentReader = s3DocumentReader;
     this.chunker = chunker;
   }
-  public ApiModels.IngestResponse ingest(ApiModels.IngestRequest request) {
-    return ingestText(request.source(), request.text());
+  public ApiModels.IngestResponse ingest(ApiModels.IngestRequest request, UUID workspaceId) {
+    return ingestText(request.source(), request.text(), workspaceId, null);
   }
-  public ApiModels.IngestResponse ingestFromS3(ApiModels.S3IngestRequest request) {
+  public ApiModels.IngestResponse ingestFromS3(ApiModels.S3IngestRequest request, UUID workspaceId) {
+    WorkspaceAccessService.requireObjectKey(request.key(), workspaceId);
     String text = readS3Document(request.key());
-    return ingestText(request.key(), text);
+    return ingestText(request.key(), text, workspaceId, null);
   }
 
   String readS3Document(String key) {
@@ -46,22 +48,26 @@ public class RagService {
     }
     return text;
   }
-  private ApiModels.IngestResponse ingestText(String source, String text) {
-    return ingestText(source, text, null);
+  public ApiModels.IngestResponse ingest(ApiModels.IngestRequest request) {
+    return ingest(request, WorkspaceAccessService.LEGACY_WORKSPACE_ID);
   }
 
-  private ApiModels.IngestResponse ingestText(String source, String text, java.util.UUID documentId) {
+  public ApiModels.IngestResponse ingestFromS3(ApiModels.S3IngestRequest request) {
+    return ingestFromS3(request, WorkspaceAccessService.LEGACY_WORKSPACE_ID);
+  }
+
+  private ApiModels.IngestResponse ingestText(String source, String text, UUID workspaceId, UUID documentId) {
     List<String> chunks = chunker.split(text);
     if (chunks.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document contains no extractable text");
     }
     List<float[]> vectors = embedInBatches(chunks);
     return new ApiModels.IngestResponse(
-        store.save(source, chunks, vectors, embeddings.modelId(), documentId), chunks.size());
+        store.save(workspaceId, source, chunks, vectors, embeddings.modelId(), documentId), chunks.size());
   }
-  public ApiModels.QueryResponse query(ApiModels.QueryRequest request) {
+  public ApiModels.QueryResponse query(ApiModels.QueryRequest request, UUID workspaceId) {
     List<RetrievedChunk> candidates = store.search(
-        request.question(), embeddings.embed(request.question()), embeddings.modelId(), CANDIDATE_RESULTS);
+        workspaceId, request.question(), embeddings.embed(request.question()), embeddings.modelId(), CANDIDATE_RESULTS);
     List<RetrievedChunk> matches =
         reranker.rerank(request.question(), candidates, MAX_RESULTS);
     if (matches.isEmpty()) {
@@ -74,27 +80,33 @@ public class RagService {
     return new ApiModels.QueryResponse(chat.answer(request.question(), context), sources);
   }
 
-  public ApiModels.ReindexResponse reindexMissingEmbeddings() {
+  public ApiModels.QueryResponse query(ApiModels.QueryRequest request) {
+    return query(request, WorkspaceAccessService.LEGACY_WORKSPACE_ID);
+  }
+
+  public ApiModels.ReindexResponse reindexMissingEmbeddings(UUID workspaceId) {
     int total = 0;
     List<DocumentStore.ChunkToEmbed> batch;
-    while (!(batch = store.findChunksWithStaleEmbeddings(embeddings.modelId(), REEMBED_BATCH_SIZE)).isEmpty()) {
+    while (!(batch = store.findChunksWithStaleEmbeddings(
+        workspaceId, embeddings.modelId(), REEMBED_BATCH_SIZE)).isEmpty()) {
       List<float[]> vectors = embeddings.embedAll(batch.stream().map(DocumentStore.ChunkToEmbed::content).toList());
       if (vectors.size() != batch.size()) {
         throw new IllegalStateException("Embedding provider returned a different number of vectors than inputs");
       }
       for (int i = 0; i < batch.size(); i++) {
-        store.updateEmbedding(batch.get(i).id(), vectors.get(i), embeddings.modelId());
+        store.updateEmbedding(workspaceId, batch.get(i).id(), vectors.get(i), embeddings.modelId());
         total++;
       }
     }
     return new ApiModels.ReindexResponse(total);
   }
-  ApiModels.IngestResponse indexText(String source, String text) {
-    return ingestText(source, text);
+
+  public ApiModels.ReindexResponse reindexMissingEmbeddings() {
+    return reindexMissingEmbeddings(WorkspaceAccessService.LEGACY_WORKSPACE_ID);
   }
 
-  ApiModels.IngestResponse indexText(String source, String text, java.util.UUID documentId) {
-    return ingestText(source, text, documentId);
+  ApiModels.IngestResponse indexText(String source, String text, UUID workspaceId, UUID documentId) {
+    return ingestText(source, text, workspaceId, documentId);
   }
 
   private List<float[]> embedInBatches(List<String> chunks) {

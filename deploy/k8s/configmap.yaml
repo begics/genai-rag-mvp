@@ -4,6 +4,13 @@ metadata: {name: genai-rag-config, namespace: genai-rag}
 data:
   DATABASE_URL: jdbc:postgresql://postgres:5432/rag
   DATABASE_USERNAME: rag
+  KEYCLOAK_CLIENT_ID: rag-assistant
+  KEYCLOAK_ISSUER_URI: https://REPLACE_WITH_KEYCLOAK_HOST/realms/rag
+  KEYCLOAK_AUTHORIZATION_URI: https://REPLACE_WITH_KEYCLOAK_HOST/realms/rag/protocol/openid-connect/auth
+  KEYCLOAK_TOKEN_URI: http://keycloak.keycloak.svc.cluster.local:8080/realms/rag/protocol/openid-connect/token
+  KEYCLOAK_USER_INFO_URI: http://keycloak.keycloak.svc.cluster.local:8080/realms/rag/protocol/openid-connect/userinfo
+  KEYCLOAK_JWK_SET_URI: http://keycloak.keycloak.svc.cluster.local:8080/realms/rag/protocol/openid-connect/certs
+  KEYCLOAK_END_SESSION_URI: https://REPLACE_WITH_KEYCLOAK_HOST/realms/rag/protocol/openid-connect/logout
   RAG_PROVIDER: infomaniak
   INFOMANIAK_AI_PRODUCT_ID: REPLACE_WITH_YOUR_PRODUCT_ID
   INFOMANIAK_AI_CHAT_MODEL: REPLACE_WITH_AVAILABLE_CHAT_MODEL_ID

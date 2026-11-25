@@ -1,0 +1,43 @@
+{
+  "realm": "rag",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "USER", "description": "Use assigned RAG workspaces" },
+      { "name": "ADMIN", "description": "Administrative access to legacy data and services" }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-rag",
+    "composite": true,
+    "clientRole": false,
+    "containerId": "rag",
+    "attributes": {},
+    "composites": { "realm": ["USER"] }
+  },
+  "clients": [
+    {
+      "clientId": "rag-assistant",
+      "name": "RAG Assistant",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/login/oauth2/code/keycloak"],
+      "webOrigins": ["http://localhost:8080"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "defaultClientScopes": ["profile", "email", "roles", "web-origins"]
+    }
+  ]
+}

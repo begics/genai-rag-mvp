@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.begics.rag.contract.ApiModels.UploadResponse;
 import com.begics.rag.service.DocumentUploadService;
+import com.begics.rag.service.WorkspaceAccessService;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,13 +18,17 @@ import static org.mockito.ArgumentMatchers.any;
 
 class UploadControllerTest {
   private final DocumentUploadService uploadService = org.mockito.Mockito.mock(DocumentUploadService.class);
-  private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new UploadController(uploadService)).build();
+  private final WorkspaceAccessService workspaces = org.mockito.Mockito.mock(WorkspaceAccessService.class);
+  private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new UploadController(uploadService, workspaces)).build();
 
   @Test
   void acceptsMultipartUploadsAndReturnsTheS3ObjectKey() throws Exception {
     MockMultipartFile file = new MockMultipartFile("file", "manual.pdf", "application/pdf",
         "pdf content".getBytes());
-    when(uploadService.upload(any())).thenReturn(
+    UUID workspaceId = UUID.randomUUID();
+    when(workspaces.resolve(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(workspaceId);
+    when(uploadService.upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId))).thenReturn(
         new UploadResponse("uploads/id/manual.pdf", "manual.pdf", "application/pdf", 11, true));
 
     mvc.perform(multipart("/api/uploads").file(file))
@@ -30,6 +36,6 @@ class UploadControllerTest {
         .andExpect(jsonPath("$.key").value("uploads/id/manual.pdf"))
         .andExpect(jsonPath("$.indexable").value(true));
 
-    verify(uploadService).upload(any());
+    verify(uploadService).upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId));
   }
 }

@@ -1,8 +1,8 @@
 # Copilot instructions
 
 This repository is a Java 27 / Spring Boot 4.2 RAG MVP. It uses PostgreSQL with
-pgvector, RustFS through an S3-compatible API, Docker Compose, HTTP Basic
-authentication, and an optional Infomaniak OpenAI-compatible provider. Read
+pgvector, RustFS through an S3-compatible API, Docker Compose, Keycloak OIDC
+login, workspace-scoped authorization, and an optional Infomaniak provider. Read
 `README.md`, `HANDOFF.md`, and the affected source/tests before changing behavior.
 
 - Preserve the existing controller → service → store/provider boundaries.

@@ -28,10 +28,10 @@ public class IndexingJobWorker {
       IndexingJob job = jobs.get(id)
           .orElseThrow(() -> new IllegalStateException("Indexing job disappeared: " + id));
       if ("REEMBED".equals(job.jobType())) {
-        jobs.complete(id, ragService.reindexMissingEmbeddings().chunksEmbedded());
+        jobs.complete(id, ragService.reindexMissingEmbeddings(job.workspaceId()).chunksEmbedded());
       } else {
         String text = job.objectKey() == null ? job.content() : ragService.readS3Document(job.objectKey());
-        var result = ragService.indexText(job.source(), text, id);
+        var result = ragService.indexText(job.source(), text, job.workspaceId(), id);
         jobs.complete(id, result.chunks());
       }
     } catch (RuntimeException exception) {

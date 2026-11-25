@@ -17,20 +17,21 @@ public class IndexingJobService {
     this.worker = worker;
   }
 
-  public ApiModels.IndexingJobResponse enqueueText(ApiModels.IngestRequest request) {
-    return enqueue(jobs.create(request.source(), null, request.text()));
+  public ApiModels.IndexingJobResponse enqueueText(ApiModels.IngestRequest request, UUID workspaceId) {
+    return enqueue(jobs.create(workspaceId, request.source(), null, request.text()));
   }
 
-  public ApiModels.IndexingJobResponse enqueueS3(ApiModels.S3IngestRequest request) {
-    return enqueue(jobs.create(request.key(), request.key(), null));
+  public ApiModels.IndexingJobResponse enqueueS3(ApiModels.S3IngestRequest request, UUID workspaceId) {
+    WorkspaceAccessService.requireObjectKey(request.key(), workspaceId);
+    return enqueue(jobs.create(workspaceId, request.key(), request.key(), null));
   }
 
-  public ApiModels.IndexingJobResponse enqueueReembed() {
-    return enqueue(jobs.createReembed());
+  public ApiModels.IndexingJobResponse enqueueReembed(UUID workspaceId) {
+    return enqueue(jobs.createReembed(workspaceId));
   }
 
-  public ApiModels.IndexingJobResponse get(UUID id) {
-    return jobs.get(id).map(IndexingJobService::toResponse)
+  public ApiModels.IndexingJobResponse get(UUID id, UUID workspaceId) {
+    return jobs.get(id, workspaceId).map(IndexingJobService::toResponse)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Indexing job not found"));
   }
 

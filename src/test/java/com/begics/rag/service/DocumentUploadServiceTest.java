@@ -9,6 +9,7 @@ import com.begics.rag.storage.S3ObjectWriter;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import java.nio.charset.StandardCharsets;
 
 class DocumentUploadServiceTest {
   private final S3ObjectWriter objectWriter = org.mockito.Mockito.mock(S3ObjectWriter.class);
@@ -18,7 +19,7 @@ class DocumentUploadServiceTest {
   void uploadsTextAndPdfAsIndexableFiles() {
     for (String filename : new String[] {"notes.txt", "manual.PDF", "data.csv"}) {
       MockMultipartFile file = new MockMultipartFile("file", filename, "application/octet-stream",
-          "content".getBytes());
+          (filename.endsWith(".PDF") ? "%PDF-1.7 content" : "content").getBytes(StandardCharsets.UTF_8));
 
       var uploaded = service.upload(file);
 
@@ -33,7 +34,9 @@ class DocumentUploadServiceTest {
   void uploadsAudioAndVideoButMarksThemNotIndexable() {
     for (String filename : new String[] {"talk.mp3", "demo.mp4"}) {
       MockMultipartFile file = new MockMultipartFile("file", filename, "application/octet-stream",
-          new byte[] {1, 2, 3});
+          filename.endsWith(".mp3")
+              ? "ID3".getBytes(StandardCharsets.US_ASCII)
+              : new byte[] {0, 0, 0, 0, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'});
 
       var uploaded = service.upload(file);
 
@@ -56,11 +59,27 @@ class DocumentUploadServiceTest {
   @Test
   void sanitizesUploadedFilenameAndKeepsItWithinAnOpaqueUniqueKey() {
     MockMultipartFile file = new MockMultipartFile("file", "../../private notes.pdf", "application/pdf",
-        "content".getBytes());
+        "%PDF-1.7 content".getBytes(StandardCharsets.UTF_8));
 
     var uploaded = service.upload(file);
 
     assertThat(uploaded.filename()).isEqualTo("private notes.pdf");
     assertThat(uploaded.key()).endsWith("/private notes.pdf");
+  }
+
+  @Test
+  void rejectsFilesWhoseContentDoesNotMatchTheirExtension() {
+    MockMultipartFile executable = new MockMultipartFile(
+        "file", "notes.pdf", "application/pdf", "not a pdf".getBytes(StandardCharsets.UTF_8));
+    MockMultipartFile invalidUtf8 = new MockMultipartFile(
+        "file", "notes.txt", "text/plain", new byte[] {(byte) 0xc3, (byte) 0x28});
+
+    assertThatThrownBy(() -> service.upload(executable))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("does not match");
+    assertThatThrownBy(() -> service.upload(invalidUtf8))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("does not match");
+    verifyNoInteractions(objectWriter);
   }
 }

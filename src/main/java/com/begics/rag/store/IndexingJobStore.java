@@ -14,32 +14,44 @@ public class IndexingJobStore {
     this.jdbc = jdbc;
   }
 
-  public IndexingJob create(String source, String objectKey, String content) {
+  public IndexingJob create(UUID workspaceId, String source, String objectKey, String content) {
     UUID id = UUID.randomUUID();
     jdbc.update("""
-        insert into indexing_jobs(id, source, object_key, content, status)
-        values (?, ?, ?, ?, 'QUEUED')
-        """, id, source, objectKey, content);
+        insert into indexing_jobs(id, source, object_key, content, status, workspace_id)
+        values (?, ?, ?, ?, 'QUEUED', ?)
+        """, id, source, objectKey, content, workspaceId);
     return get(id).orElseThrow(() -> new IllegalStateException("Created indexing job could not be loaded"));
   }
 
-  public IndexingJob createReembed() {
+  public IndexingJob createReembed(UUID workspaceId) {
     UUID id = UUID.randomUUID();
     jdbc.update("""
-        insert into indexing_jobs(id, source, job_type, status)
-        values (?, 'embedding-reindex', 'REEMBED', 'QUEUED')
-        """, id);
+        insert into indexing_jobs(id, source, job_type, status, workspace_id)
+        values (?, 'embedding-reindex', 'REEMBED', 'QUEUED', ?)
+        """, id, workspaceId);
     return get(id).orElseThrow(() -> new IllegalStateException("Created re-embedding job could not be loaded"));
   }
 
   public Optional<IndexingJob> get(UUID id) {
     return jdbc.query("""
-        select id, source, object_key, content, status, chunk_count, error_message, job_type
+        select id, source, object_key, content, status, chunk_count, error_message, job_type, workspace_id
           from indexing_jobs
          where id = ?
         """, (rs, row) -> new IndexingJob(
             rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
-            rs.getString(5), rs.getInt(6), rs.getString(7), rs.getString(8)), id).stream().findFirst();
+            rs.getString(5), rs.getInt(6), rs.getString(7), rs.getString(8),
+            rs.getObject(9, UUID.class)), id).stream().findFirst();
+  }
+
+  public Optional<IndexingJob> get(UUID id, UUID workspaceId) {
+    return jdbc.query("""
+        select id, source, object_key, content, status, chunk_count, error_message, job_type, workspace_id
+          from indexing_jobs
+         where id = ? and workspace_id = ?
+        """, (rs, row) -> new IndexingJob(
+            rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
+            rs.getString(5), rs.getInt(6), rs.getString(7), rs.getString(8),
+            rs.getObject(9, UUID.class)), id, workspaceId).stream().findFirst();
   }
 
   public List<UUID> queuedIds() {
@@ -89,5 +101,5 @@ public class IndexingJobStore {
 
   public record IndexingJob(
       UUID id, String source, String objectKey, String content, String status, int chunks, String errorMessage,
-      String jobType) {}
+      String jobType, UUID workspaceId) {}
 }
