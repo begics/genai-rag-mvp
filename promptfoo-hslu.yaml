@@ -1,0 +1,44 @@
+description: Live evaluation using one selected HSLU course wiki page
+
+prompts:
+  - "{{question}}"
+
+providers:
+  - id: file://promptfoo/rag-provider.mjs
+
+tests:
+  - description: Explains what reciprocal rank fusion combines
+    vars:
+      question: "What does Reciprocal Rank Fusion combine?"
+    assert:
+      - type: javascript
+        value: "/ranks/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'hslu/wiki/rag-course-architecture.md')"
+
+  - description: Distinguishes RRF smoothing k from result count
+    vars:
+      question: "In Reciprocal Rank Fusion, what does the smoothing constant k not represent?"
+    assert:
+      - type: javascript
+        value: "/not the same parameter as (?:the )?number of (?:retrieved )?results/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'hslu/wiki/rag-course-architecture.md')"
+
+  - description: Distinguishes candidate recall from reranking
+    vars:
+      question: "Can reranking recover relevant evidence that the initial retrieval stage missed?"
+    assert:
+      - type: javascript
+        value: "/cannot|can't|cannot|does not|doesn't|not able/i.test(output) && /missing|missed|candidate/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'hslu/wiki/rag-course-architecture.md')"
+
+  - description: Distinguishes ANN recall from relevance recall
+    vars:
+      question: "How is ANN recall different from relevance recall?"
+    assert:
+      - type: javascript
+        value: "/approximate nearest neighbors|approximate neighbors/i.test(output) && /relevant evidence|labeled relevant|relevance/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'hslu/wiki/rag-course-architecture.md')"

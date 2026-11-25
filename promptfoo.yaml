@@ -1,0 +1,35 @@
+description: Live evaluation of the local Infomaniak-backed RAG application
+
+prompts:
+  - "{{question}}"
+
+providers:
+  - id: file://promptfoo/rag-provider.mjs
+
+tests:
+  - description: Retrieves the unique observatory marker with its source
+    vars:
+      question: "What is the Alpine observatory test marker?"
+    assert:
+      - type: javascript
+        value: "output.includes('ORBIT-731')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory.txt')"
+
+  - description: Retrieves the telescope calibration interval with its source
+    vars:
+      question: "How often is the telescope calibration performed?"
+    assert:
+      - type: javascript
+        value: "output.includes('17')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-calibration.txt')"
+
+  - description: Refuses to answer a fact absent from the workspace
+    vars:
+      question: "Which city hosted the 1988 lunar observatory convention?"
+    assert:
+      - type: javascript
+        value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|don't know|cannot determine/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.every((source) => ['promptfoo-observatory.txt', 'promptfoo-calibration.txt'].includes(source.source))"

@@ -51,6 +51,10 @@ The response contains a job ID; poll `GET /api/indexing-jobs/{id}` with the same
 
 Run tests with `./mvnw test`. ArchUnit enforces package dependency boundaries and cycle-free slices. PostgreSQL integration tests use a disposable Testcontainer and are skipped when Docker is unavailable. The small deterministic retrieval evaluation corpus is in `src/test/resources/retrieval-evaluation.json`; its integration test checks Recall@5 ≥ 1.0 and MRR ≥ 0.75. It exercises lexical and vector retrieval only, not live model answer quality.
 
+For a live end-to-end evaluation against the local Infomaniak-backed app, run `npm ci` once and then `npm run eval:rag:live`. The runner requires the local Compose services to be running and `RAG_PROVIDER=infomaniak` with the Keycloak and Infomaniak settings configured in `.env`. Promptfoo tests two synthetic facts for answer and source attribution, plus a question that must not be answerable from the test corpus. The runner creates a temporary workspace and removes its jobs and documents afterward, including when evaluation fails. Live model calls may incur provider usage; no project documents are sent.
+
+To also evaluate against a small, selected HSLU repository sample, run `HSLU_REPO_PATH=/path/to/cas-llms-and-ai-agents-hs-2026 npm run eval:rag:hslu`. This separate live evaluation reads only the tracked `wiki/rag-course-architecture.md` file from that checkout; it does not ingest the whole repository, PDFs, notebooks, local/untracked files, or credentials. The file is sent to the configured Infomaniak services for indexing and answer generation. Confirm that this use is permitted for the course material before running it. Results are not shared or written to Promptfoo's local result store, and the temporary workspace is removed afterward.
+
 GitHub Actions runs the Maven test suite, validates the Compose configuration,
 and builds the application image on pushes and pull requests. CI uses disposable
 offline test credentials, not deployment secrets. Copilot path-specific rules

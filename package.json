@@ -1,0 +1,12 @@
+{
+  "name": "genai-rag-mvp-evaluations",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "eval:rag:live": "node promptfoo/run-live-eval.mjs",
+    "eval:rag:hslu": "node promptfoo/run-live-eval.mjs --hslu"
+  },
+  "devDependencies": {
+    "promptfoo": "0.126.0"
+  }
+}

@@ -11,5 +11,9 @@ kubeconfig
 # Maven build output
 target/
 
+# Node.js evaluation dependencies
+node_modules/
+.promptfoo/
+
 # Local IDE configuration
 .idea/
