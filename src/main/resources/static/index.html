@@ -25,6 +25,7 @@
     body { margin: 0; min-width: 320px; min-height: 100vh; }
     button, input, textarea { font: inherit; }
     button { cursor: pointer; }
+    button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: not-allowed; opacity: .55; }
     button:focus-visible, input:focus-visible, textarea:focus-visible, .drop-zone:focus-within {
       outline: 3px solid #9db5ff;
       outline-offset: 2px;
@@ -282,7 +283,19 @@
     const accountName = document.getElementById("account-name");
     let activeWorkspaceId = sessionStorage.getItem("rag-workspace-id");
     let uploadedFileCount = 0;
+    let isAuthenticated = false;
     let csrfToken;
+
+    function setAuthenticated(authenticated) {
+      isAuthenticated = authenticated;
+      document.querySelectorAll("button, input, textarea, select").forEach(control => {
+        control.disabled = !authenticated;
+      });
+      if (authenticated) {
+        workspaceSelect.disabled = true;
+        updateFileSelection();
+      }
+    }
 
     async function apiFetch(url, options = {}) {
       const method = (options.method || "GET").toUpperCase();
@@ -352,7 +365,7 @@
 
     function updateFileSelection() {
       const files = Array.from(fileInput.files || []);
-      uploadButton.disabled = files.length === 0;
+      uploadButton.disabled = !isAuthenticated || files.length === 0;
       uploadButton.textContent = files.length
         ? `Upload ${files.length} selected file${files.length === 1 ? "" : "s"}`
         : "Choose files to upload";
@@ -455,6 +468,7 @@
       });
     }
     dropZone.addEventListener("drop", event => {
+      if (!isAuthenticated) return;
       if (event.dataTransfer.files.length) {
         fileInput.files = event.dataTransfer.files;
         updateFileSelection();
@@ -622,6 +636,7 @@
     async function loadAccount() {
       try {
         const account = await responseJson(await apiFetch("/api/me"));
+        setAuthenticated(true);
         accountName.textContent = account.displayName || account.subject;
         accountName.title = accountName.textContent;
         loginLink.hidden = true;
@@ -629,6 +644,7 @@
         await loadWorkspaces();
       } catch (error) {
         if (error.message.includes("(401)")) {
+          setAuthenticated(false);
           loginLink.hidden = false;
           accountName.textContent = "";
           return;
@@ -637,6 +653,8 @@
         chatStatus.classList.add("error");
       }
     }
+
+    setAuthenticated(false);
 
     questionInput.addEventListener("keydown", event => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {

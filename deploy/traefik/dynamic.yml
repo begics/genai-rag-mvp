@@ -1,0 +1,25 @@
+http:
+  routers:
+    rag-app:
+      rule: Host(`ai-rag.begic.ch`)
+      entryPoints:
+        - websecure
+      service: rag-app
+      tls:
+        certResolver: letsencrypt
+    keycloak:
+      rule: Host(`auth.begic.ch`)
+      entryPoints:
+        - websecure
+      service: keycloak
+      tls:
+        certResolver: letsencrypt
+  services:
+    rag-app:
+      loadBalancer:
+        servers:
+          - url: http://app:8080
+    keycloak:
+      loadBalancer:
+        servers:
+          - url: http://keycloak:8080
