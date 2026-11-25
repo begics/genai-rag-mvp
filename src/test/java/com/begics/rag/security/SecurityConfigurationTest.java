@@ -21,11 +21,16 @@ import com.begics.rag.service.IndexingJobService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import jakarta.servlet.http.Cookie;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.HashSet;
 import java.time.Instant;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -102,6 +107,29 @@ class SecurityConfigurationTest {
             org.hamcrest.Matchers.containsString("frame-ancestors 'none'")))
         .andExpect(header().string("X-Content-Type-Options", "nosniff"))
         .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"));
+  }
+
+  @Test
+  void contentSecurityPolicyAllowsTheCurrentInlineUiBlocks() throws Exception {
+    var response = mvc.perform(get("/")).andExpect(status().isOk()).andReturn().getResponse();
+    String policy = response.getHeader("Content-Security-Policy");
+    org.assertj.core.api.Assertions.assertThat(policy).isNotNull();
+    String html;
+    try (var stream = getClass().getResourceAsStream("/static/index.html")) {
+      org.assertj.core.api.Assertions.assertThat(stream).isNotNull();
+      html = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    for (String tag : List.of("script", "style")) {
+      Matcher matcher = Pattern.compile("<" + tag + "(?:\\s[^>]*)?>(.*?)</" + tag + ">",
+          Pattern.DOTALL).matcher(html);
+      org.assertj.core.api.Assertions.assertThat(matcher.find())
+          .as("inline %s block exists", tag).isTrue();
+      String digest = Base64.getEncoder().encodeToString(
+          MessageDigest.getInstance("SHA-256").digest(
+              matcher.group(1).getBytes(StandardCharsets.UTF_8)));
+      org.assertj.core.api.Assertions.assertThat(policy).contains("'sha256-" + digest + "'");
+    }
   }
 
   @Test
