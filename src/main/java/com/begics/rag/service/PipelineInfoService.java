@@ -1,0 +1,38 @@
+package com.begics.rag.service;
+
+import com.begics.rag.contract.ApiModels.PipelineInfoResponse;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Service;
+
+@Service
+public class PipelineInfoService {
+  private final Environment environment;
+
+  public PipelineInfoService(Environment environment) {
+    this.environment = environment;
+  }
+
+  public PipelineInfoResponse current() {
+    String provider = environment.getProperty("rag.provider", "offline");
+    if ("infomaniak".equalsIgnoreCase(provider)) {
+      return new PipelineInfoResponse(
+          "Infomaniak AI",
+          "OpenAI-compatible Embeddings API",
+          environment.getProperty("rag.infomaniak.embedding-model", "Not configured"),
+          environment.getProperty("rag.embedding-dimensions", Integer.class, 3584),
+          "Cohere-compatible Rerank API",
+          environment.getProperty("rag.infomaniak.rerank-model", "Not configured"),
+          "OpenAI-compatible Chat Completions API",
+          environment.getProperty("rag.infomaniak.chat-model", "Not configured"));
+    }
+    return new PipelineInfoResponse(
+        "Offline demo mode",
+        "Deterministic local embedding implementation",
+        "hash-based demo embeddings",
+        environment.getProperty("rag.embedding-dimensions", Integer.class, 3584),
+        "No external reranker call",
+        "pass-through",
+        "No external chat LLM call",
+        "canned demo response");
+  }
+}

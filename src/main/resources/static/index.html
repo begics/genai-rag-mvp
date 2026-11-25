@@ -132,17 +132,26 @@
     .file-status.error { color: #a12622; }
     .indexed-heading { margin: 18px 0 4px; color: #46556a; font-size: .82rem; font-weight: 680; }
     .indexed-empty { padding: 8px 0; color: #929eae; font-size: .74rem; }
-    .pipeline-panel { margin-top: 18px; padding: 13px; border: 1px solid #e8edf5; border-radius: 10px; background: #fbfcfe; }
+    .pipeline-panel { margin: 0 0 20px; padding: 18px; border: 1px solid #e0e7f2; border-radius: 14px; background: #fff; box-shadow: 0 8px 26px #1e35510a; }
     .pipeline-panel.failed { border-color: #e7b6b3; }
-    .pipeline-panel h3 { margin: 0 0 6px; color: #354359; font-size: .82rem; }
-    .pipeline-status { margin: 0 0 10px; color: #68778a; font-size: .73rem; line-height: 1.45; }
-    .pipeline-steps { display: flex; gap: 6px; margin: 0; padding: 0 0 6px; overflow-x: auto; list-style: none; }
-    .pipeline-step { position: relative; min-width: 105px; flex: 1 0 105px; padding: 8px; border: 1px solid #e2e7ef; border-radius: 8px; color: #68778a; background: white; font-size: .68rem; line-height: 1.4; }
-    .pipeline-step:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -9px; z-index: 1; padding: 0 2px; color: #98a2b1; background: #fbfcfe; transform: translate(50%, -50%); }
-    .pipeline-step strong { display: block; margin-bottom: 3px; color: #46556a; font-size: .7rem; }
+    .pipeline-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 15px; }
+    .pipeline-panel h2 { margin: 0; color: #253247; font-size: 1rem; }
+    .pipeline-status { margin: 5px 0 0; color: #68778a; font-size: .76rem; line-height: 1.45; }
+    .pipeline-lane + .pipeline-lane { margin-top: 14px; padding-top: 13px; border-top: 1px solid #edf0f5; }
+    .pipeline-lane-title { margin: 0 0 8px; color: #526174; font-size: .72rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .pipeline-steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: pipeline-step; }
+    .pipeline-step { position: relative; min-width: 0; min-height: 79px; padding: 10px; border: 1px solid #e2e7ef; border-radius: 9px; color: #68778a; background: #fbfcfe; font-size: .68rem; line-height: 1.4; }
+    .pipeline-step { counter-increment: pipeline-step; }
+    .pipeline-step::before { content: counter(pipeline-step, decimal-leading-zero); position: absolute; top: 5px; right: 7px; color: #9aa5b4; font-size: .58rem; font-weight: 750; }
+    .pipeline-step:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -13px; z-index: 1; color: #98a2b1; font-size: .9rem; font-weight: 700; transform: translate(50%, -50%); }
+    .pipeline-step strong { display: block; margin-bottom: 4px; color: #354359; font-size: .72rem; }
+    .pipeline-step small { display: block; margin-top: 4px; color: #7b8797; font-size: .64rem; overflow-wrap: anywhere; }
     .pipeline-step.done { border-color: #b8dfc7; background: #f0faf3; }
     .pipeline-step.current { border-color: #8ca8ff; background: #f0f4ff; box-shadow: 0 0 0 2px #e4eaff; }
     .pipeline-step.failed { border-color: #e7b6b3; background: #fff5f4; }
+    .pipeline-components { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+    .pipeline-component { padding: 6px 9px; border: 1px solid #e7ebf2; border-radius: 7px; color: #58677b; background: #f8f9fc; font-size: .68rem; overflow-wrap: anywhere; }
+    .pipeline-component strong { color: #354359; }
     .job-list { margin: 8px 0 0; padding: 0; list-style: none; }
     .job-row { padding: 9px 0; border-top: 1px solid #edf0f5; }
     .job-row:first-child { border-top: 0; }
@@ -166,6 +175,8 @@
       .upload-symbol { grid-row: 1 / span 2; margin: 0; }
       .drop-copy { margin: 0; }
       .file-input, .upload-button, .upload-limit { grid-column: 1 / -1; }
+      .pipeline-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .pipeline-step:nth-child(4n)::after { display: none; }
     }
     @media (max-width: 560px) {
       .topbar { height: 62px; padding: 0 16px; }
@@ -178,6 +189,10 @@
       .page-heading { margin: 0 4px 17px; }
       .workspace { gap: 13px; }
       .side-panel { padding: 16px; }
+      .pipeline-panel { padding: 13px; }
+      .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .pipeline-step { min-height: 72px; }
+      .pipeline-step::after { display: none; }
       .chat-panel { min-height: 62vh; min-height: 62svh; border-radius: 13px; }
       .chat-header { min-height: 66px; padding: 13px 15px; }
       .chat-log { min-height: 270px; max-height: 52vh; padding: 18px 14px; gap: 16px; }
@@ -212,6 +227,48 @@
       <h1>Ask your documents.</h1>
       <p>Get grounded answers from the files you have indexed.</p>
     </div>
+    <section class="pipeline-panel" aria-labelledby="pipeline-title">
+      <div class="pipeline-header">
+        <div>
+          <h2 id="pipeline-title">How your files become answers</h2>
+          <p class="pipeline-status" id="pipeline-status" aria-live="polite">Sign in to see indexing activity.</p>
+        </div>
+      </div>
+      <div class="pipeline-lane">
+        <h3 class="pipeline-lane-title">1 · File indexing</h3>
+        <ol class="pipeline-steps" id="pipeline-steps" aria-label="File indexing flow">
+          <li class="pipeline-step" data-pipeline-node="browser"><strong>Browser</strong>Upload file</li>
+          <li class="pipeline-step" data-pipeline-node="s3"><strong>RustFS · S3</strong>Original file</li>
+          <li class="pipeline-step" data-pipeline-node="queue"><strong>PostgreSQL</strong>Job queue</li>
+          <li class="pipeline-step" data-pipeline-node="worker"><strong>Spring Boot</strong>Background worker · 2 workers</li>
+          <li class="pipeline-step" data-pipeline-node="chunks"><strong>Extract &amp; chunk</strong>Text preparation</li>
+          <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI embeddings</strong><small data-pipeline-service="embedding">Loading service…</small><small data-pipeline-model="embedding">Loading model…</small></li>
+          <li class="pipeline-step" data-pipeline-node="index"><strong>PostgreSQL</strong>pgvector index</li>
+        </ol>
+      </div>
+      <div class="pipeline-lane">
+        <h3 class="pipeline-lane-title">2 · Question &amp; answer</h3>
+        <ol class="pipeline-steps" aria-label="Question answering flow">
+          <li class="pipeline-step"><strong>Browser</strong>Ask a question</li>
+          <li class="pipeline-step"><strong>Spring Boot</strong>RAG API</li>
+          <li class="pipeline-step"><strong>AI embeddings</strong><small data-pipeline-query-embedding>Same service and model</small></li>
+          <li class="pipeline-step"><strong>PostgreSQL</strong>pgvector search</li>
+          <li class="pipeline-step"><strong>AI reranker</strong><small data-pipeline-service="rerank">Loading service…</small><small data-pipeline-model="rerank">Loading model…</small></li>
+          <li class="pipeline-step"><strong>Chat LLM</strong><small data-pipeline-service="chat">Loading service…</small><small data-pipeline-model="chat">Loading model…</small></li>
+          <li class="pipeline-step"><strong>Browser</strong>Answer + sources</li>
+        </ol>
+      </div>
+      <div class="pipeline-components" aria-label="Configured AI components">
+        <span class="pipeline-component"><strong>Provider:</strong> <span data-pipeline-model="provider">Loading…</span></span>
+        <span class="pipeline-component"><strong>Login:</strong> Keycloak · OIDC</span>
+        <span class="pipeline-component"><strong>Web/API/workers:</strong> Spring Boot</span>
+        <span class="pipeline-component"><strong>PDF text extraction:</strong> Apache PDFBox 3</span>
+        <span class="pipeline-component"><strong>Chunking:</strong> 1,500 characters · 200 overlap</span>
+        <span class="pipeline-component"><strong>Object storage:</strong> RustFS · S3 API</span>
+        <span class="pipeline-component"><strong>Queue &amp; vector DB:</strong> PostgreSQL · pgvector</span>
+      </div>
+      <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
+    </section>
     <div class="workspace">
       <section class="panel chat-panel" aria-labelledby="chat-title">
         <div class="chat-header">
@@ -270,20 +327,6 @@
           <p class="upload-limit">Up to 100 MiB per file · TXT, Markdown, CSV, PDF, audio and video</p>
         </div>
         <ul class="file-list" id="file-list" aria-live="polite"></ul>
-        <section class="pipeline-panel" aria-labelledby="pipeline-title">
-          <h3 id="pipeline-title">Indexing pipeline</h3>
-          <p class="pipeline-status" id="pipeline-status" aria-live="polite">Sign in to see indexing activity.</p>
-          <ol class="pipeline-steps" id="pipeline-steps">
-            <li class="pipeline-step" data-pipeline-node="browser"><strong>Browser</strong>Upload request</li>
-            <li class="pipeline-step" data-pipeline-node="s3"><strong>RustFS · S3</strong>Original file</li>
-            <li class="pipeline-step" data-pipeline-node="queue"><strong>PostgreSQL · rag</strong>Job queue</li>
-            <li class="pipeline-step" data-pipeline-node="worker"><strong>Spring workers</strong>Read S3 and extract · 2 workers</li>
-            <li class="pipeline-step" data-pipeline-node="chunks"><strong>Text chunks</strong>Extract and split</li>
-            <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI service</strong>Create embeddings</li>
-            <li class="pipeline-step" data-pipeline-node="index"><strong>PostgreSQL · rag</strong>pgvector index</li>
-          </ol>
-          <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
-        </section>
         <h3 class="indexed-heading">Indexed documents</h3>
         <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
         <div class="privacy-note"><strong>Private by design.</strong> Files are stored in your configured object storage. Audio and video are stored but are not transcribed or searchable yet.</div>
@@ -299,6 +342,16 @@
     const pipelineStatus = document.getElementById("pipeline-status");
     const pipelinePanel = document.querySelector(".pipeline-panel");
     const pipelineSteps = Array.from(document.querySelectorAll("[data-pipeline-node]"));
+    const pipelineModels = {
+      provider: document.querySelector('[data-pipeline-model="provider"]'),
+      embeddingService: document.querySelector('[data-pipeline-service="embedding"]'),
+      embedding: document.querySelector('[data-pipeline-model="embedding"]'),
+      queryEmbedding: document.querySelector("[data-pipeline-query-embedding]"),
+      rerankService: document.querySelector('[data-pipeline-service="rerank"]'),
+      rerank: document.querySelector('[data-pipeline-model="rerank"]'),
+      chatService: document.querySelector('[data-pipeline-service="chat"]'),
+      chat: document.querySelector('[data-pipeline-model="chat"]')
+    };
     const dropZone = document.getElementById("drop-zone");
     const chatLog = document.getElementById("chat-log");
     const questionInput = document.getElementById("question");
@@ -595,6 +648,23 @@
       document.getElementById("workspace-create").disabled = false;
       await loadIndexedDocuments();
       await refreshIndexingJobs();
+      await loadPipelineInfo();
+    }
+
+    async function loadPipelineInfo() {
+      try {
+        const info = await responseJson(await apiFetch("/api/pipeline-info"));
+        pipelineModels.provider.textContent = info.provider;
+        pipelineModels.embeddingService.textContent = `${info.provider} · ${info.embeddingService}`;
+        pipelineModels.embedding.textContent = `${info.embeddingModel} · ${info.embeddingDimensions} dimensions`;
+        pipelineModels.queryEmbedding.textContent = `${info.embeddingService} · ${info.embeddingModel}`;
+        pipelineModels.rerankService.textContent = `${info.provider} · ${info.rerankService}`;
+        pipelineModels.rerank.textContent = info.rerankModel;
+        pipelineModels.chatService.textContent = `${info.provider} · ${info.chatService}`;
+        pipelineModels.chat.textContent = info.chatModel;
+      } catch (error) {
+        pipelineModels.provider.textContent = `Could not load: ${error.message}`;
+      }
     }
 
     function renderPipeline(job) {
@@ -626,6 +696,8 @@
           step.classList.add("current");
         } else if (completed || (active && index < currentIndex)) {
           step.classList.add("done");
+        } else if (job.status === "FAILED" && step.dataset.pipelineNode === currentNode) {
+          step.classList.add("failed");
         }
       });
 

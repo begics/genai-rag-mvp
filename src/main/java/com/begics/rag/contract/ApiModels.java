@@ -21,4 +21,7 @@ public final class ApiModels {
   public record QueryResponse(String answer, List<SourceReference> sources) {}
   public record WorkspaceRequest(@NotBlank @Size(max = 120) String name) {}
   public record IndexedDocumentResponse(String id, String source, int chunks) {}
+  public record PipelineInfoResponse(
+      String provider, String embeddingService, String embeddingModel, int embeddingDimensions,
+      String rerankService, String rerankModel, String chatService, String chatModel) {}
 }

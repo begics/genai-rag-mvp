@@ -18,6 +18,7 @@ import com.begics.rag.contract.ApiModels.QueryResponse;
 import com.begics.rag.contract.ApiModels.S3IngestRequest;
 import com.begics.rag.service.DocumentUploadService;
 import com.begics.rag.service.IndexingJobService;
+import com.begics.rag.service.PipelineInfoService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import com.begics.rag.contract.ApiModels.IndexedDocumentResponse;
@@ -80,6 +81,9 @@ class SecurityConfigurationTest {
   private IndexedDocumentService indexedDocumentService;
 
   @MockitoBean
+  private PipelineInfoService pipelineInfoService;
+
+  @MockitoBean
   private JwtDecoder jwtDecoder;
 
   @Test
@@ -95,6 +99,7 @@ class SecurityConfigurationTest {
         .andExpect(status().isUnauthorized());
     mvc.perform(get("/api/csrf")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/pipeline-info")).andExpect(status().isUnauthorized());
   }
 
   @Test
@@ -126,6 +131,25 @@ class SecurityConfigurationTest {
         .andExpect(jsonPath("$[0].id").value("document-id"))
         .andExpect(jsonPath("$[0].source").value("uploads/workspace/notes.txt"))
         .andExpect(jsonPath("$[0].chunks").value(3));
+  }
+
+  @Test
+  void returnsConfiguredAiComponentsToAuthenticatedUsers() throws Exception {
+    when(pipelineInfoService.current()).thenReturn(
+        new com.begics.rag.contract.ApiModels.PipelineInfoResponse(
+            "Infomaniak AI", "Embeddings API", "embedding-model", 3584,
+            "Rerank API", "rerank-model", "Chat API", "chat-model"));
+
+    mvc.perform(get("/api/pipeline-info").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.provider").value("Infomaniak AI"))
+        .andExpect(jsonPath("$.embeddingService").value("Embeddings API"))
+        .andExpect(jsonPath("$.embeddingModel").value("embedding-model"))
+        .andExpect(jsonPath("$.embeddingDimensions").value(3584))
+        .andExpect(jsonPath("$.rerankService").value("Rerank API"))
+        .andExpect(jsonPath("$.rerankModel").value("rerank-model"))
+        .andExpect(jsonPath("$.chatService").value("Chat API"))
+        .andExpect(jsonPath("$.chatModel").value("chat-model"));
   }
 
   @Test

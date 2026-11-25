@@ -167,6 +167,21 @@ services:
       KEYCLOAK_END_SESSION_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/rag/protocol/openid-connect/logout
     ports:
       - "127.0.0.1:8080:8080"
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    profiles: ["cloudflare-tunnel"]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN:?set CLOUDFLARED_TUNNEL_TOKEN}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
   portainer:
     image: portainer/portainer-ce:2.45.2
     restart: unless-stopped
