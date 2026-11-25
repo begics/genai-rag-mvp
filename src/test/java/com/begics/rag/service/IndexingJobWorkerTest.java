@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.begics.rag.contract.ApiModels.ReindexResponse;
 import com.begics.rag.store.IndexingJobStore;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
+import com.begics.rag.store.IndexingJobStore.Stage;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -21,14 +22,19 @@ class IndexingJobWorkerTest {
     UUID id = UUID.randomUUID();
     when(jobs.markProcessing(id)).thenReturn(true);
     when(jobs.get(id)).thenReturn(Optional.of(
-        new IndexingJob(id, "embedding-reindex", null, null, "PROCESSING", 0, null, "REEMBED",
+        new IndexingJob(id, "embedding-reindex", null, null, "PROCESSING", Stage.READING, 0, null, "REEMBED",
             WorkspaceAccessService.LEGACY_WORKSPACE_ID)));
-    when(ragService.reindexMissingEmbeddings(WorkspaceAccessService.LEGACY_WORKSPACE_ID))
+    when(ragService.reindexMissingEmbeddings(
+        org.mockito.ArgumentMatchers.eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID),
+        org.mockito.ArgumentMatchers.any()))
         .thenReturn(new ReindexResponse(39));
 
     worker.process(id);
 
-    verify(ragService).reindexMissingEmbeddings(WorkspaceAccessService.LEGACY_WORKSPACE_ID);
+    verify(jobs).updateStage(id, Stage.REINDEXING);
+    verify(ragService).reindexMissingEmbeddings(
+        org.mockito.ArgumentMatchers.eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID),
+        org.mockito.ArgumentMatchers.any());
     verify(jobs).complete(id, 39);
   }
 }

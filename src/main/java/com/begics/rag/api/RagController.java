@@ -55,6 +55,11 @@ public class RagController {
       @Valid @RequestBody ApiModels.S3IngestRequest request) {
     return indexingJobs.enqueueS3(request, workspaces.resolve(authentication, workspace));
   }
+  @org.springframework.web.bind.annotation.GetMapping("/indexing-jobs")
+  public java.util.List<ApiModels.IndexingJobResponse> listIndexingJobs(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace) {
+    return indexingJobs.recent(workspaces.resolve(authentication, workspace));
+  }
   @org.springframework.web.bind.annotation.GetMapping("/indexing-jobs/{id}")
   public ApiModels.IndexingJobResponse getJob(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,

@@ -2,6 +2,7 @@ package com.begics.rag.service;
 
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.store.IndexingJobStore;
+import com.begics.rag.store.IndexingJobStore.IndexingJob;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,10 @@ public class IndexingJobService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Indexing job not found"));
   }
 
+  public java.util.List<ApiModels.IndexingJobResponse> recent(UUID workspaceId) {
+    return jobs.recent(workspaceId).stream().map(IndexingJobService::toResponse).toList();
+  }
+
   public void recoverPendingJobs() {
     jobs.recoverProcessingJobs();
     jobs.queuedIds().forEach(worker::process);
@@ -47,6 +52,6 @@ public class IndexingJobService {
 
   private static ApiModels.IndexingJobResponse toResponse(IndexingJobStore.IndexingJob job) {
     return new ApiModels.IndexingJobResponse(
-        job.id(), job.status(), job.chunks(), job.errorMessage());
+        job.id(), job.source(), job.status(), job.stage().name(), job.chunks(), job.errorMessage(), job.jobType());
   }
 }

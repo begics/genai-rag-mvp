@@ -61,7 +61,8 @@ class RagControllerTest {
     UUID workspaceId = UUID.randomUUID();
     when(workspaces.resolve(Mockito.any(), Mockito.any())).thenReturn(workspaceId);
     when(indexingJobs.enqueueReembed(workspaceId))
-        .thenReturn(new IndexingJobResponse(UUID.randomUUID(), "QUEUED", 0, null));
+        .thenReturn(new IndexingJobResponse(
+            UUID.randomUUID(), "embedding-reindex", "QUEUED", "QUEUED", 0, null, "REEMBED"));
     mvc.perform(post("/api/documents/reindex-embeddings"))
         .andExpect(status().isAccepted());
     verify(indexingJobs).enqueueReembed(workspaceId);

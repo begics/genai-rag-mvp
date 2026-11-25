@@ -1,10 +1,16 @@
+import { Agent } from 'undici';
+
 const APP_URL = process.env.RAG_APP_URL || 'http://localhost:8080';
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const LOCAL_HTTP_HOSTS = new Set(['localhost', '127.0.0.1']);
+const LOCAL_HTTPS_HOSTS = new Set(['app.localhost', 'auth.localhost']);
+const LOCAL_TLS_DISPATCHER = new Agent({ connect: { rejectUnauthorized: false } });
 
 function assertLocalUrl(value) {
   const url = new URL(value);
-  if (url.protocol !== 'http:' || !LOCAL_HOSTS.has(url.hostname)) {
-    throw new Error('Live Promptfoo evaluation is restricted to a local HTTP app URL.');
+  const isAllowedHttp = url.protocol === 'http:' && LOCAL_HTTP_HOSTS.has(url.hostname);
+  const isAllowedHttps = url.protocol === 'https:' && LOCAL_HTTPS_HOSTS.has(url.hostname);
+  if (!isAllowedHttp && !isAllowedHttps) {
+    throw new Error('Live Promptfoo evaluation is restricted to localhost and the local HTTPS app/Keycloak hosts.');
   }
   return url;
 }
@@ -42,7 +48,7 @@ export class RagSession {
         const pathMatches = requestUrl.pathname.startsWith(cookie.path);
         const secureMatches = !cookie.secure
           || requestUrl.protocol === 'https:'
-          || LOCAL_HOSTS.has(requestUrl.hostname);
+          || LOCAL_HTTP_HOSTS.has(requestUrl.hostname);
         return domainMatches && pathMatches && secureMatches;
       })
       .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -81,7 +87,13 @@ export class RagSession {
     for (let redirects = 0; redirects <= 10; redirects++) {
       const cookie = this.cookieHeader(target);
       if (cookie) headers.set('Cookie', cookie);
-      const response = await fetch(target, { method, body, headers, redirect: 'manual' });
+      const response = await fetch(target, {
+        method,
+        body,
+        headers,
+        redirect: 'manual',
+        ...(new URL(target).protocol === 'https:' ? { dispatcher: LOCAL_TLS_DISPATCHER } : {}),
+      });
       this.storeCookies(response, target);
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
 

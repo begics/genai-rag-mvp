@@ -25,12 +25,6 @@ public class WorkspaceAccessService {
   public UUID resolve(Authentication authentication, String requestedWorkspace) {
     String subject = requireSubject(authentication);
     ensurePersonalWorkspace(subject);
-    if (isAdmin(authentication)) {
-      jdbc.update("""
-          insert into workspace_members(workspace_id, subject, role) values (?, ?, 'OWNER')
-          on conflict (workspace_id, subject) do nothing
-          """, LEGACY_WORKSPACE_ID, subject);
-    }
     if (requestedWorkspace == null || requestedWorkspace.isBlank()) {
       return personalWorkspaceId(subject);
     }
@@ -40,7 +34,7 @@ public class WorkspaceAccessService {
     } catch (IllegalArgumentException exception) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid workspace ID");
     }
-    if (!isMember(workspaceId, subject)) {
+    if (!isOwner(workspaceId, subject)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Workspace access denied");
     }
     return workspaceId;
@@ -54,7 +48,7 @@ public class WorkspaceAccessService {
     return jdbc.query("""
         select w.id, w.name, m.role from workspaces w
           join workspace_members m on m.workspace_id = w.id
-         where m.subject = ? order by w.created_at, w.name
+         where m.subject = ? and m.role = 'OWNER' order by w.created_at, w.name
         """, (rs, row) -> new Workspace(
             rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3)), subject);
   }
@@ -67,52 +61,6 @@ public class WorkspaceAccessService {
     jdbc.update("insert into workspace_members(workspace_id, subject, role) values (?, ?, 'OWNER')",
         id, subject);
     return new Workspace(id, name.trim(), "OWNER");
-  }
-
-  @Transactional
-  public List<WorkspaceMember> members(Authentication authentication, UUID workspaceId) {
-    String subject = requireSubject(authentication);
-    requireOwner(workspaceId, subject);
-    return jdbc.query("""
-        select subject, role from workspace_members where workspace_id = ? order by created_at
-        """, (rs, row) -> new WorkspaceMember(rs.getString(1), rs.getString(2)), workspaceId);
-  }
-
-  @Transactional
-  public WorkspaceMember addMember(
-      Authentication authentication, UUID workspaceId, String newSubject) {
-    String subject = requireSubject(authentication);
-    requireOwner(workspaceId, subject);
-    String memberSubject = newSubject == null ? "" : newSubject.trim();
-    if (memberSubject.isBlank() || memberSubject.length() > 200 || memberSubject.equals(subject)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provide another valid Keycloak user ID");
-    }
-    jdbc.update("""
-        insert into workspace_members(workspace_id, subject, role) values (?, ?, 'MEMBER')
-        on conflict (workspace_id, subject) do nothing
-        """, workspaceId, memberSubject);
-    return jdbc.queryForObject("""
-        select subject, role from workspace_members where workspace_id = ? and subject = ?
-        """, (rs, row) -> new WorkspaceMember(rs.getString(1), rs.getString(2)),
-        workspaceId, memberSubject);
-  }
-
-  @Transactional
-  public void removeMember(Authentication authentication, UUID workspaceId, String memberSubject) {
-    String subject = requireSubject(authentication);
-    requireOwner(workspaceId, subject);
-    int removed = jdbc.update("""
-        delete from workspace_members
-         where workspace_id = ? and subject = ? and role = 'MEMBER'
-        """, workspaceId, memberSubject);
-    if (removed == 0) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace member not found");
-    }
-  }
-
-  public static boolean isAdmin(Authentication authentication) {
-    return authentication != null && authentication.getAuthorities().stream()
-        .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
   }
 
   public static void requireObjectKey(String key, UUID workspaceId) {
@@ -136,20 +84,11 @@ public class WorkspaceAccessService {
     return UUID.nameUUIDFromBytes(("rag-personal-workspace:" + subject).getBytes(StandardCharsets.UTF_8));
   }
 
-  private boolean isMember(UUID workspaceId, String subject) {
+  private boolean isOwner(UUID workspaceId, String subject) {
     return Boolean.TRUE.equals(jdbc.queryForObject("""
-        select exists (select 1 from workspace_members where workspace_id = ? and subject = ?)
-        """, Boolean.class, workspaceId, subject));
-  }
-
-  private void requireOwner(UUID workspaceId, String subject) {
-    Boolean owner = jdbc.queryForObject("""
         select exists (select 1 from workspace_members
                         where workspace_id = ? and subject = ? and role = 'OWNER')
-        """, Boolean.class, workspaceId, subject);
-    if (!Boolean.TRUE.equals(owner)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Workspace owner access required");
-    }
+        """, Boolean.class, workspaceId, subject));
   }
 
   private static String requireSubject(Authentication authentication) {
@@ -161,5 +100,4 @@ public class WorkspaceAccessService {
   }
 
   public record Workspace(UUID id, String name, String role) {}
-  public record WorkspaceMember(String subject, String role) {}
 }

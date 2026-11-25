@@ -17,8 +17,8 @@ public class IndexingJobStore {
   public IndexingJob create(UUID workspaceId, String source, String objectKey, String content) {
     UUID id = UUID.randomUUID();
     jdbc.update("""
-        insert into indexing_jobs(id, source, object_key, content, status, workspace_id)
-        values (?, ?, ?, ?, 'QUEUED', ?)
+        insert into indexing_jobs(id, source, object_key, content, status, stage, workspace_id)
+        values (?, ?, ?, ?, 'QUEUED', 'QUEUED', ?)
         """, id, source, objectKey, content, workspaceId);
     return get(id).orElseThrow(() -> new IllegalStateException("Created indexing job could not be loaded"));
   }
@@ -26,32 +26,45 @@ public class IndexingJobStore {
   public IndexingJob createReembed(UUID workspaceId) {
     UUID id = UUID.randomUUID();
     jdbc.update("""
-        insert into indexing_jobs(id, source, job_type, status, workspace_id)
-        values (?, 'embedding-reindex', 'REEMBED', 'QUEUED', ?)
+        insert into indexing_jobs(id, source, job_type, status, stage, workspace_id)
+        values (?, 'embedding-reindex', 'REEMBED', 'QUEUED', 'QUEUED', ?)
         """, id, workspaceId);
     return get(id).orElseThrow(() -> new IllegalStateException("Created re-embedding job could not be loaded"));
   }
 
   public Optional<IndexingJob> get(UUID id) {
     return jdbc.query("""
-        select id, source, object_key, content, status, chunk_count, error_message, job_type, workspace_id
+        select id, source, object_key, content, status, stage, chunk_count, error_message, job_type, workspace_id
           from indexing_jobs
          where id = ?
         """, (rs, row) -> new IndexingJob(
             rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
-            rs.getString(5), rs.getInt(6), rs.getString(7), rs.getString(8),
-            rs.getObject(9, UUID.class)), id).stream().findFirst();
+            rs.getString(5), Stage.valueOf(rs.getString(6)), rs.getInt(7), rs.getString(8), rs.getString(9),
+            rs.getObject(10, UUID.class)), id).stream().findFirst();
   }
 
   public Optional<IndexingJob> get(UUID id, UUID workspaceId) {
     return jdbc.query("""
-        select id, source, object_key, content, status, chunk_count, error_message, job_type, workspace_id
+        select id, source, object_key, content, status, stage, chunk_count, error_message, job_type, workspace_id
           from indexing_jobs
          where id = ? and workspace_id = ?
         """, (rs, row) -> new IndexingJob(
             rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
-            rs.getString(5), rs.getInt(6), rs.getString(7), rs.getString(8),
-            rs.getObject(9, UUID.class)), id, workspaceId).stream().findFirst();
+            rs.getString(5), Stage.valueOf(rs.getString(6)), rs.getInt(7), rs.getString(8), rs.getString(9),
+            rs.getObject(10, UUID.class)), id, workspaceId).stream().findFirst();
+  }
+
+  public List<IndexingJob> recent(UUID workspaceId) {
+    return jdbc.query("""
+        select id, source, object_key, content, status, stage, chunk_count, error_message, job_type, workspace_id
+          from indexing_jobs
+         where workspace_id = ?
+         order by updated_at desc, created_at desc
+         limit 20
+        """, (rs, row) -> new IndexingJob(
+            rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4),
+            rs.getString(5), Stage.valueOf(rs.getString(6)), rs.getInt(7), rs.getString(8), rs.getString(9),
+            rs.getObject(10, UUID.class)), workspaceId);
   }
 
   public List<UUID> queuedIds() {
@@ -62,7 +75,7 @@ public class IndexingJobStore {
   public void recoverProcessingJobs() {
     jdbc.update("""
         update indexing_jobs
-           set status = 'QUEUED', updated_at = now()
+           set status = 'QUEUED', stage = 'QUEUED', updated_at = now()
          where status = 'PROCESSING'
         """);
   }
@@ -70,15 +83,27 @@ public class IndexingJobStore {
   public boolean markProcessing(UUID id) {
     return jdbc.update("""
         update indexing_jobs
-           set status = 'PROCESSING', updated_at = now(), error_message = null
+           set status = 'PROCESSING', stage = 'READING', updated_at = now(), error_message = null
          where id = ? and status = 'QUEUED'
         """, id) == 1;
+  }
+
+  public void updateStage(UUID id, Stage stage) {
+    if (stage == Stage.QUEUED || stage == Stage.COMPLETED || stage == Stage.FAILED) {
+      throw new IllegalArgumentException("Stage is not an active processing stage: " + stage);
+    }
+    jdbc.update("""
+        update indexing_jobs
+           set stage = ?, updated_at = now()
+         where id = ? and status = 'PROCESSING'
+        """, stage.name(), id);
   }
 
   public void complete(UUID id, int chunks) {
     jdbc.update("""
         update indexing_jobs
-           set status = 'COMPLETED', chunk_count = ?, object_key = null, content = null, updated_at = now()
+           set status = 'COMPLETED', stage = 'COMPLETED', chunk_count = ?,
+               object_key = null, content = null, updated_at = now()
          where id = ?
         """, chunks, id);
   }
@@ -86,7 +111,8 @@ public class IndexingJobStore {
   public void fail(UUID id, String message) {
     jdbc.update("""
         update indexing_jobs
-           set status = 'FAILED', error_message = ?, object_key = null, content = null, updated_at = now()
+           set status = 'FAILED', stage = 'FAILED', error_message = ?,
+               object_key = null, content = null, updated_at = now()
          where id = ?
         """, safeMessage(message), id);
   }
@@ -100,6 +126,10 @@ public class IndexingJobStore {
   }
 
   public record IndexingJob(
-      UUID id, String source, String objectKey, String content, String status, int chunks, String errorMessage,
-      String jobType, UUID workspaceId) {}
+      UUID id, String source, String objectKey, String content, String status, Stage stage, int chunks,
+      String errorMessage, String jobType, UUID workspaceId) {}
+
+  public enum Stage {
+    QUEUED, READING, CHUNKING, EMBEDDING, SAVING, REINDEXING, COMPLETED, FAILED
+  }
 }

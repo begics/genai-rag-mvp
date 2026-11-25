@@ -81,7 +81,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         || path.equals("/api/documents/s3"))) {
       return 10;
     }
-    if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/indexing-jobs/")) {
+    if ("GET".equalsIgnoreCase(method)
+        && (path.equals("/api/indexing-jobs") || path.startsWith("/api/indexing-jobs/"))) {
       return 120;
     }
     if ("GET".equalsIgnoreCase(method) && "/api/csrf".equals(path)) {

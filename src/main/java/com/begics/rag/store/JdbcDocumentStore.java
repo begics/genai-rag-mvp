@@ -44,6 +44,18 @@ public class JdbcDocumentStore implements DocumentStore {
   }
 
   @Override
+  public List<IndexedDocument> listDocuments(UUID workspaceId) {
+    return jdbc.query("""
+        select d.id::text, d.source, count(c.id)::integer
+          from documents d left join chunks c on c.document_id = d.id
+         where d.workspace_id = ?
+         group by d.id, d.source, d.created_at
+         order by d.created_at desc, d.source
+        """, (rs, row) -> new IndexedDocument(rs.getString(1), rs.getString(2), rs.getInt(3)),
+        workspaceId);
+  }
+
+  @Override
   public List<RetrievedChunk> search(
       UUID workspaceId, String query, float[] embedding, String embeddingModel, int limit) {
     List<RetrievedChunk> vectorMatches = jdbc.query("""

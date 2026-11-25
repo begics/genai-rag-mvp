@@ -113,11 +113,6 @@
     .workspace-controls { display: flex; gap: 7px; margin: 11px 0 12px; }
     .workspace-select { flex: 1; min-width: 0; padding: 8px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; background: white; font-size: .78rem; }
     .workspace-create { flex: 0 0 auto; padding: 7px 9px; border: 1px solid #dce5ff; border-radius: 8px; color: var(--blue-dark); background: #f5f7ff; font-size: .74rem; font-weight: 650; }
-    .members-heading { margin: 8px 0 4px; color: #68778a; font-size: .72rem; font-weight: 650; }
-    .member-list { list-style: none; margin: 0; padding: 0; }
-    .member-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; color: #46556a; font-size: .72rem; }
-    .member-subject { min-width: 0; overflow-wrap: anywhere; }
-    .member-remove { flex: 0 0 auto; padding: 4px 6px; border: 1px solid #e6e9ef; border-radius: 6px; color: #68778a; background: white; font-size: .68rem; }
     .count-badge { min-width: 24px; padding: 3px 7px; border-radius: 999px; color: #526174; background: #f0f3f8; text-align: center; font-size: .72rem; font-weight: 700; }
     .side-copy { margin: 0 0 17px; color: var(--muted); font-size: .81rem; line-height: 1.55; }
     .drop-zone { padding: 18px 12px; border: 1.5px dashed #cbd4e1; border-radius: 12px; background: #fafbfe; text-align: center; transition: .15s ease; }
@@ -135,6 +130,25 @@
     .file-name { color: #354359; font-size: .79rem; font-weight: 650; overflow-wrap: anywhere; }
     .file-status { margin-top: 5px; color: var(--muted); font-size: .75rem; line-height: 1.45; overflow-wrap: anywhere; }
     .file-status.error { color: #a12622; }
+    .indexed-heading { margin: 18px 0 4px; color: #46556a; font-size: .82rem; font-weight: 680; }
+    .indexed-empty { padding: 8px 0; color: #929eae; font-size: .74rem; }
+    .pipeline-panel { margin-top: 18px; padding: 13px; border: 1px solid #e8edf5; border-radius: 10px; background: #fbfcfe; }
+    .pipeline-panel.failed { border-color: #e7b6b3; }
+    .pipeline-panel h3 { margin: 0 0 6px; color: #354359; font-size: .82rem; }
+    .pipeline-status { margin: 0 0 10px; color: #68778a; font-size: .73rem; line-height: 1.45; }
+    .pipeline-steps { display: flex; gap: 6px; margin: 0; padding: 0 0 6px; overflow-x: auto; list-style: none; }
+    .pipeline-step { position: relative; min-width: 105px; flex: 1 0 105px; padding: 8px; border: 1px solid #e2e7ef; border-radius: 8px; color: #68778a; background: white; font-size: .68rem; line-height: 1.4; }
+    .pipeline-step:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -9px; z-index: 1; padding: 0 2px; color: #98a2b1; background: #fbfcfe; transform: translate(50%, -50%); }
+    .pipeline-step strong { display: block; margin-bottom: 3px; color: #46556a; font-size: .7rem; }
+    .pipeline-step.done { border-color: #b8dfc7; background: #f0faf3; }
+    .pipeline-step.current { border-color: #8ca8ff; background: #f0f4ff; box-shadow: 0 0 0 2px #e4eaff; }
+    .pipeline-step.failed { border-color: #e7b6b3; background: #fff5f4; }
+    .job-list { margin: 8px 0 0; padding: 0; list-style: none; }
+    .job-row { padding: 9px 0; border-top: 1px solid #edf0f5; }
+    .job-row:first-child { border-top: 0; }
+    .job-title { color: #354359; font-size: .75rem; font-weight: 650; overflow-wrap: anywhere; }
+    .job-detail { margin-top: 3px; color: #68778a; font-size: .7rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .job-detail.error { color: #a12622; }
     .row-action { margin-top: 8px; padding: 7px 9px; border: 1px solid #dce5ff; border-radius: 7px; color: var(--blue-dark); background: #f5f7ff; font-size: .75rem; font-weight: 650; }
     .row-action:hover { background: #eaf0ff; }
     .row-action:disabled { opacity: .55; cursor: wait; }
@@ -245,11 +259,6 @@
           </select>
           <button class="workspace-create" id="workspace-create" type="button" disabled>New</button>
         </div>
-        <div id="member-management" hidden>
-          <div class="members-heading">Workspace members</div>
-          <ul class="member-list" id="member-list" aria-live="polite"></ul>
-          <button class="row-action" id="workspace-share" type="button">Add member by Keycloak subject ID</button>
-        </div>
         <p class="side-copy">Add files to your private library, then index text and PDFs to make them searchable.</p>
         <div class="drop-zone" id="drop-zone">
           <div class="upload-symbol" aria-hidden="true">↥</div>
@@ -261,6 +270,22 @@
           <p class="upload-limit">Up to 100 MiB per file · TXT, Markdown, CSV, PDF, audio and video</p>
         </div>
         <ul class="file-list" id="file-list" aria-live="polite"></ul>
+        <section class="pipeline-panel" aria-labelledby="pipeline-title">
+          <h3 id="pipeline-title">Indexing pipeline</h3>
+          <p class="pipeline-status" id="pipeline-status" aria-live="polite">Sign in to see indexing activity.</p>
+          <ol class="pipeline-steps" id="pipeline-steps">
+            <li class="pipeline-step" data-pipeline-node="browser"><strong>Browser</strong>Upload request</li>
+            <li class="pipeline-step" data-pipeline-node="s3"><strong>RustFS · S3</strong>Original file</li>
+            <li class="pipeline-step" data-pipeline-node="queue"><strong>PostgreSQL · rag</strong>Job queue</li>
+            <li class="pipeline-step" data-pipeline-node="worker"><strong>Spring workers</strong>Read S3 and extract · 2 workers</li>
+            <li class="pipeline-step" data-pipeline-node="chunks"><strong>Text chunks</strong>Extract and split</li>
+            <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI service</strong>Create embeddings</li>
+            <li class="pipeline-step" data-pipeline-node="index"><strong>PostgreSQL · rag</strong>pgvector index</li>
+          </ol>
+          <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
+        </section>
+        <h3 class="indexed-heading">Indexed documents</h3>
+        <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
         <div class="privacy-note"><strong>Private by design.</strong> Files are stored in your configured object storage. Audio and video are stored but are not transcribed or searchable yet.</div>
       </aside>
     </div>
@@ -269,6 +294,11 @@
     const fileInput = document.getElementById("file-input");
     const uploadButton = document.getElementById("upload-button");
     const fileList = document.getElementById("file-list");
+    const indexedFileList = document.getElementById("indexed-file-list");
+    const indexingJobList = document.getElementById("indexing-job-list");
+    const pipelineStatus = document.getElementById("pipeline-status");
+    const pipelinePanel = document.querySelector(".pipeline-panel");
+    const pipelineSteps = Array.from(document.querySelectorAll("[data-pipeline-node]"));
     const dropZone = document.getElementById("drop-zone");
     const chatLog = document.getElementById("chat-log");
     const questionInput = document.getElementById("question");
@@ -276,15 +306,23 @@
     const chatStatus = document.getElementById("chat-status");
     const fileCount = document.getElementById("file-count");
     const workspaceSelect = document.getElementById("workspace-select");
-    const memberManagement = document.getElementById("member-management");
-    const memberList = document.getElementById("member-list");
-    const shareWorkspaceButton = document.getElementById("workspace-share");
     const loginLink = document.getElementById("login-link");
     const accountName = document.getElementById("account-name");
     let activeWorkspaceId = sessionStorage.getItem("rag-workspace-id");
-    let uploadedFileCount = 0;
     let isAuthenticated = false;
     let csrfToken;
+    let indexingRefreshTimer;
+
+    const stageLabels = {
+      QUEUED: "Waiting in the database queue",
+      READING: "Worker is reading the file from S3 and extracting text",
+      CHUNKING: "Splitting extracted text into chunks",
+      EMBEDDING: "Creating search embeddings with the AI service",
+      SAVING: "Saving chunks and embeddings to PostgreSQL pgvector",
+      REINDEXING: "Refreshing embeddings",
+      COMPLETED: "Indexing complete",
+      FAILED: "Indexing failed"
+    };
 
     function setAuthenticated(authenticated) {
       isAuthenticated = authenticated;
@@ -382,9 +420,6 @@
       status.textContent = "Uploading...";
       row.append(name, status);
       fileList.prepend(row);
-      uploadedFileCount++;
-      fileCount.textContent = String(uploadedFileCount);
-      fileCount.setAttribute("aria-label", `${uploadedFileCount} file${uploadedFileCount === 1 ? "" : "s"}`);
       return { row, status };
     }
 
@@ -410,21 +445,9 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ key: uploaded.key })
               }));
-              let result = job;
-              let attempts = 0;
-              while ((result.status === "QUEUED" || result.status === "PROCESSING") && attempts < 600) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                result = await responseJson(await apiFetch(`/api/indexing-jobs/${job.id}`));
-                attempts++;
-              }
-              if (result.status === "QUEUED" || result.status === "PROCESSING") {
-                throw new Error("Indexing is still running. You can keep chatting and check again later.");
-              }
-              if (result.status !== "COMPLETED") {
-                throw new Error(result.errorMessage || "Document indexing failed.");
-              }
-              status.textContent = `Ready to search · ${result.chunks} chunks indexed`;
+              status.textContent = "Indexing job submitted. Follow its progress below.";
               indexButton.remove();
+              await refreshIndexingJobs();
             } catch (error) {
               status.textContent = error.message;
               status.classList.add("error");
@@ -519,17 +542,15 @@
     workspaceSelect.addEventListener("change", () => {
       activeWorkspaceId = workspaceSelect.value;
       sessionStorage.setItem("rag-workspace-id", activeWorkspaceId);
-      loadWorkspaceMembers();
       fileList.replaceChildren();
-      uploadedFileCount = 0;
-      fileCount.textContent = "0";
-      fileCount.setAttribute("aria-label", "0 files");
+      refreshIndexingJobs();
+      loadIndexedDocuments();
       chatLog.replaceChildren();
       document.getElementById("clear-chat").click();
     });
 
     document.getElementById("workspace-create").addEventListener("click", async () => {
-      const name = window.prompt("Name for the shared workspace:");
+      const name = window.prompt("Name for the workspace:");
       if (!name?.trim()) return;
       try {
         const created = await responseJson(await apiFetch("/api/workspaces", {
@@ -540,22 +561,6 @@
         activeWorkspaceId = created.id;
         sessionStorage.setItem("rag-workspace-id", activeWorkspaceId);
         await loadWorkspaces();
-      } catch (error) {
-        chatStatus.textContent = error.message;
-        chatStatus.classList.add("error");
-      }
-    });
-
-    shareWorkspaceButton.addEventListener("click", async () => {
-      const subject = window.prompt("Keycloak subject ID of the person to add:");
-      if (!subject?.trim()) return;
-      try {
-        await responseJson(await apiFetch(`/api/workspaces/${activeWorkspaceId}/members`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subject: subject.trim() })
-        }));
-        await loadWorkspaceMembers();
       } catch (error) {
         chatStatus.textContent = error.message;
         chatStatus.classList.add("error");
@@ -588,48 +593,131 @@
       sessionStorage.setItem("rag-workspace-id", selected);
       workspaceSelect.disabled = false;
       document.getElementById("workspace-create").disabled = false;
-      await loadWorkspaceMembers();
+      await loadIndexedDocuments();
+      await refreshIndexingJobs();
     }
 
-    async function loadWorkspaceMembers() {
-      const canManage = workspaceSelect.selectedOptions[0]?.dataset.role === "OWNER";
-      memberManagement.hidden = !canManage;
-      memberList.replaceChildren();
-      if (!canManage) return;
+    function renderPipeline(job) {
+      pipelinePanel.classList.toggle("failed", job?.status === "FAILED");
+      const active = job?.status === "QUEUED" || job?.status === "PROCESSING";
+      const completed = job?.status === "COMPLETED";
+      const stage = job?.stage || "QUEUED";
+      const fileName = job?.source?.split("/").pop() || "document";
+      if (!job) {
+        pipelineStatus.textContent = "No indexing jobs yet. Upload a text file or PDF and choose “Index for chat”.";
+        pipelineSteps.forEach(step => step.classList.remove("current", "done", "failed"));
+        return;
+      }
+
+      const currentNode = {
+        QUEUED: "queue",
+        READING: "worker",
+        CHUNKING: "chunks",
+        EMBEDDING: "embeddings",
+        REINDEXING: "embeddings",
+        SAVING: "index",
+        COMPLETED: "index"
+      }[stage];
+      const order = ["browser", "s3", "queue", "worker", "chunks", "embeddings", "index"];
+      const currentIndex = order.indexOf(currentNode);
+      pipelineSteps.forEach((step, index) => {
+        step.classList.remove("current", "done", "failed");
+        if (active && index === currentIndex) {
+          step.classList.add("current");
+        } else if (completed || (active && index < currentIndex)) {
+          step.classList.add("done");
+        }
+      });
+
+      if (job.status === "FAILED") {
+        pipelineStatus.textContent = `${fileName}: ${job.errorMessage || stageLabels.FAILED}`;
+      } else if (completed) {
+        pipelineStatus.textContent = `Last job: ${fileName} — complete, ${job.chunks} chunks stored in PostgreSQL.`;
+      } else {
+        pipelineStatus.textContent = `Currently processing: ${fileName} — ${stageLabels[stage] || stage}.`;
+      }
+    }
+
+    function renderIndexingJobs(jobs) {
+      indexingJobList.replaceChildren();
+      const activeJobs = jobs.filter(job => job.status === "QUEUED" || job.status === "PROCESSING");
+      const highlighted = activeJobs[0] || jobs[0];
+      renderPipeline(highlighted);
+
+      if (!jobs.length) {
+        const empty = document.createElement("li");
+        empty.className = "indexed-empty";
+        empty.textContent = "No indexing jobs yet.";
+        indexingJobList.append(empty);
+      }
+
+      for (const job of jobs) {
+        const row = document.createElement("li");
+        row.className = "job-row";
+        const title = document.createElement("div");
+        title.className = "job-title";
+        title.textContent = job.source.split("/").pop() || job.source;
+        const detail = document.createElement("div");
+        detail.className = `job-detail${job.status === "FAILED" ? " error" : ""}`;
+        if (job.status === "COMPLETED") {
+          detail.textContent = `Complete · ${job.chunks} chunks indexed`;
+        } else if (job.status === "FAILED") {
+          detail.textContent = job.errorMessage || stageLabels.FAILED;
+        } else {
+          detail.textContent = `${job.status === "QUEUED" ? "Queued" : "In progress"} · ${stageLabels[job.stage] || job.stage}`;
+        }
+        row.append(title, detail);
+        indexingJobList.append(row);
+      }
+
+      if (activeJobs.length && !indexingRefreshTimer) {
+        indexingRefreshTimer = window.setInterval(refreshIndexingJobs, 3000);
+      } else if (!activeJobs.length && indexingRefreshTimer) {
+        window.clearInterval(indexingRefreshTimer);
+        indexingRefreshTimer = undefined;
+      }
+    }
+
+    async function refreshIndexingJobs() {
+      if (!isAuthenticated || !activeWorkspaceId) return;
       try {
-        const members = await responseJson(await apiFetch(
-          `/api/workspaces/${activeWorkspaceId}/members`));
-        for (const member of members) {
-          const item = document.createElement("li");
-          item.className = "member-row";
-          const subject = document.createElement("span");
-          subject.className = "member-subject";
-          subject.textContent = `${member.subject} · ${member.role.toLowerCase()}`;
-          item.append(subject);
-          if (member.role === "MEMBER") {
-            const remove = document.createElement("button");
-            remove.className = "member-remove";
-            remove.type = "button";
-            remove.textContent = "Remove";
-            remove.setAttribute("aria-label", `Remove ${member.subject}`);
-            remove.addEventListener("click", async () => {
-              try {
-                await responseJson(await apiFetch(
-                  `/api/workspaces/${activeWorkspaceId}/members/${encodeURIComponent(member.subject)}`,
-                  { method: "DELETE" }));
-                await loadWorkspaceMembers();
-              } catch (error) {
-                chatStatus.textContent = error.message;
-                chatStatus.classList.add("error");
-              }
-            });
-            item.append(remove);
-          }
-          memberList.append(item);
+        const jobs = await responseJson(await apiFetch("/api/indexing-jobs"));
+        renderIndexingJobs(jobs);
+      } catch (error) {
+        pipelineStatus.textContent = `Could not load indexing status: ${error.message}`;
+      }
+    }
+
+    async function loadIndexedDocuments() {
+      indexedFileList.replaceChildren();
+      try {
+        const documents = await responseJson(await apiFetch("/api/documents"));
+        fileCount.textContent = String(documents.length);
+        fileCount.setAttribute("aria-label", `${documents.length} indexed document${documents.length === 1 ? "" : "s"}`);
+        if (!documents.length) {
+          const empty = document.createElement("li");
+          empty.className = "indexed-empty";
+          empty.textContent = "No indexed documents yet.";
+          indexedFileList.append(empty);
+          return;
+        }
+        for (const indexedDocument of documents) {
+          const row = document.createElement("li");
+          row.className = "file-row";
+          const name = document.createElement("div");
+          name.className = "file-name";
+          name.textContent = indexedDocument.source.split("/").pop();
+          const details = document.createElement("div");
+          details.className = "file-status";
+          details.textContent = `Ready to search · ${indexedDocument.chunks} chunks indexed`;
+          row.append(name, details);
+          indexedFileList.append(row);
         }
       } catch (error) {
-        chatStatus.textContent = error.message;
-        chatStatus.classList.add("error");
+        const failure = document.createElement("li");
+        failure.className = "indexed-empty file-status error";
+        failure.textContent = `Could not load indexed documents: ${error.message}`;
+        indexedFileList.append(failure);
       }
     }
 

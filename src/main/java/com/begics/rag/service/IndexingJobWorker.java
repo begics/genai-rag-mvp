@@ -2,6 +2,7 @@ package com.begics.rag.service;
 
 import com.begics.rag.store.IndexingJobStore;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
+import com.begics.rag.store.IndexingJobStore.Stage;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,10 +29,19 @@ public class IndexingJobWorker {
       IndexingJob job = jobs.get(id)
           .orElseThrow(() -> new IllegalStateException("Indexing job disappeared: " + id));
       if ("REEMBED".equals(job.jobType())) {
-        jobs.complete(id, ragService.reindexMissingEmbeddings(job.workspaceId()).chunksEmbedded());
+        jobs.updateStage(id, Stage.REINDEXING);
+        jobs.complete(id, ragService.reindexMissingEmbeddings(job.workspaceId(), stage -> jobs.updateStage(id, stage))
+            .chunksEmbedded());
       } else {
-        String text = job.objectKey() == null ? job.content() : ragService.readS3Document(job.objectKey());
-        var result = ragService.indexText(job.source(), text, job.workspaceId(), id);
+        String text;
+        if (job.objectKey() == null) {
+          text = job.content();
+        } else {
+          jobs.updateStage(id, Stage.READING);
+          text = ragService.readS3Document(job.objectKey());
+        }
+        var result = ragService.indexText(
+            job.source(), text, job.workspaceId(), id, stage -> jobs.updateStage(id, stage));
         jobs.complete(id, result.chunks());
       }
     } catch (RuntimeException exception) {

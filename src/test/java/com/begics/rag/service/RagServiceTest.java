@@ -14,6 +14,7 @@ import com.begics.rag.model.ChatModel;
 import com.begics.rag.model.EmbeddingModel;
 import com.begics.rag.model.Reranker;
 import com.begics.rag.store.DocumentStore;
+import com.begics.rag.store.IndexingJobStore.Stage;
 import com.begics.rag.storage.S3DocumentReader;
 import java.util.List;
 import java.util.UUID;
@@ -69,6 +70,17 @@ class RagServiceTest {
     assertThat(chunks.getValue()).hasSize(2);
     assertThat(chunks.getValue().get(0)).hasSizeLessThanOrEqualTo(1_500);
     assertThat(chunks.getValue().get(1)).contains(chunks.getValue().get(0).substring(1_300));
+  }
+
+  @Test
+  void reportsChunkEmbeddingAndStorageStagesInOrder() {
+    when(store.save(any(UUID.class), anyString(), anyList(), anyList(), anyString(), any()))
+        .thenReturn("doc-progress");
+    List<Stage> stages = new java.util.ArrayList<>();
+
+    service.indexText("notes.txt", "searchable text", UUID.randomUUID(), null, stages::add);
+
+    assertThat(stages).containsExactly(Stage.CHUNKING, Stage.EMBEDDING, Stage.SAVING);
   }
 
   @Test

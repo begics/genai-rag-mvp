@@ -33,12 +33,13 @@
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:8080/login/oauth2/code/keycloak",
+        "https://app.localhost:18443/login/oauth2/code/keycloak",
         "https://ai-rag.begic.ch/login/oauth2/code/keycloak"
       ],
-      "webOrigins": ["http://localhost:8080", "https://ai-rag.begic.ch"],
+      "webOrigins": ["http://localhost:8080", "https://app.localhost:18443", "https://ai-rag.begic.ch"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8080/*##https://ai-rag.begic.ch/*"
+        "post.logout.redirect.uris": "http://localhost:8080/*##https://app.localhost:18443/*##https://ai-rag.begic.ch/*"
       },
       "defaultClientScopes": ["profile", "email", "roles", "web-origins"]
     }

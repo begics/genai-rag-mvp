@@ -20,6 +20,8 @@ import com.begics.rag.service.DocumentUploadService;
 import com.begics.rag.service.IndexingJobService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
+import com.begics.rag.contract.ApiModels.IndexedDocumentResponse;
+import com.begics.rag.service.IndexedDocumentService;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -75,6 +77,9 @@ class SecurityConfigurationTest {
   private WorkspaceAccessService workspaces;
 
   @MockitoBean
+  private IndexedDocumentService indexedDocumentService;
+
+  @MockitoBean
   private JwtDecoder jwtDecoder;
 
   @Test
@@ -89,6 +94,7 @@ class SecurityConfigurationTest {
     mvc.perform(withCsrf(post("/api/uploads").contentType(MediaType.MULTIPART_FORM_DATA)))
         .andExpect(status().isUnauthorized());
     mvc.perform(get("/api/csrf")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
   }
 
   @Test
@@ -107,6 +113,19 @@ class SecurityConfigurationTest {
             org.hamcrest.Matchers.containsString("frame-ancestors 'none'")))
         .andExpect(header().string("X-Content-Type-Options", "nosniff"))
         .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"));
+  }
+
+  @Test
+  void listsIndexedDocumentsForTheAuthenticatedWorkspace() throws Exception {
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(indexedDocumentService.list(WORKSPACE_ID))
+        .thenReturn(List.of(new IndexedDocumentResponse("document-id", "uploads/workspace/notes.txt", 3)));
+
+    mvc.perform(get("/api/documents").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value("document-id"))
+        .andExpect(jsonPath("$[0].source").value("uploads/workspace/notes.txt"))
+        .andExpect(jsonPath("$[0].chunks").value(3));
   }
 
   @Test
@@ -182,13 +201,28 @@ class SecurityConfigurationTest {
   void acceptsAuthenticatedWorkspaceScopedIndexingJobs() throws Exception {
     when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
     when(indexingJobService.enqueueS3(any(S3IngestRequest.class), eq(WORKSPACE_ID)))
-        .thenReturn(new IndexingJobResponse(UUID.randomUUID(), "QUEUED", 0, null));
+        .thenReturn(new IndexingJobResponse(
+            UUID.randomUUID(), "uploads/" + WORKSPACE_ID + "/file/notes.txt", "QUEUED", "QUEUED", 0, null, "INDEX"));
 
     mvc.perform(withCsrf(post("/api/indexing-jobs/s3")).with(oidcLogin()
             .authorities(new SimpleGrantedAuthority("ROLE_USER")))
         .contentType(MediaType.APPLICATION_JSON)
         .content("{\"key\":\"uploads/" + WORKSPACE_ID + "/file/notes.txt\"}"))
         .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void listsRecentIndexingJobsForTheAuthenticatedWorkspace() throws Exception {
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(indexingJobService.recent(WORKSPACE_ID)).thenReturn(List.of(new IndexingJobResponse(
+        UUID.randomUUID(), "uploads/" + WORKSPACE_ID + "/notes.pdf",
+        "PROCESSING", "CHUNKING", 0, null, "INDEX")));
+
+    mvc.perform(get("/api/indexing-jobs").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].status").value("PROCESSING"))
+        .andExpect(jsonPath("$[0].stage").value("CHUNKING"))
+        .andExpect(jsonPath("$[0].source").value("uploads/" + WORKSPACE_ID + "/notes.pdf"));
   }
 
   @Test

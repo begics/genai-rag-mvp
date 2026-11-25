@@ -9,9 +9,11 @@ import com.begics.rag.store.DocumentStore;
 import com.begics.rag.storage.S3DocumentReader;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.begics.rag.store.IndexingJobStore.Stage;
 
 @Service
 public class RagService {
@@ -57,11 +59,19 @@ public class RagService {
   }
 
   private ApiModels.IngestResponse ingestText(String source, String text, UUID workspaceId, UUID documentId) {
+    return ingestText(source, text, workspaceId, documentId, ignored -> {});
+  }
+
+  private ApiModels.IngestResponse ingestText(
+      String source, String text, UUID workspaceId, UUID documentId, Consumer<Stage> stageUpdater) {
+    stageUpdater.accept(Stage.CHUNKING);
     List<String> chunks = chunker.split(text);
     if (chunks.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document contains no extractable text");
     }
+    stageUpdater.accept(Stage.EMBEDDING);
     List<float[]> vectors = embedInBatches(chunks);
+    stageUpdater.accept(Stage.SAVING);
     return new ApiModels.IngestResponse(
         store.save(workspaceId, source, chunks, vectors, embeddings.modelId(), documentId), chunks.size());
   }
@@ -85,14 +95,20 @@ public class RagService {
   }
 
   public ApiModels.ReindexResponse reindexMissingEmbeddings(UUID workspaceId) {
+    return reindexMissingEmbeddings(workspaceId, ignored -> {});
+  }
+
+  public ApiModels.ReindexResponse reindexMissingEmbeddings(UUID workspaceId, Consumer<Stage> stageUpdater) {
     int total = 0;
     List<DocumentStore.ChunkToEmbed> batch;
     while (!(batch = store.findChunksWithStaleEmbeddings(
         workspaceId, embeddings.modelId(), REEMBED_BATCH_SIZE)).isEmpty()) {
+      stageUpdater.accept(Stage.EMBEDDING);
       List<float[]> vectors = embeddings.embedAll(batch.stream().map(DocumentStore.ChunkToEmbed::content).toList());
       if (vectors.size() != batch.size()) {
         throw new IllegalStateException("Embedding provider returned a different number of vectors than inputs");
       }
+      stageUpdater.accept(Stage.SAVING);
       for (int i = 0; i < batch.size(); i++) {
         store.updateEmbedding(workspaceId, batch.get(i).id(), vectors.get(i), embeddings.modelId());
         total++;
@@ -106,7 +122,12 @@ public class RagService {
   }
 
   ApiModels.IngestResponse indexText(String source, String text, UUID workspaceId, UUID documentId) {
-    return ingestText(source, text, workspaceId, documentId);
+    return indexText(source, text, workspaceId, documentId, ignored -> {});
+  }
+
+  ApiModels.IngestResponse indexText(
+      String source, String text, UUID workspaceId, UUID documentId, Consumer<Stage> stageUpdater) {
+    return ingestText(source, text, workspaceId, documentId, stageUpdater);
   }
 
   private List<float[]> embedInBatches(List<String> chunks) {

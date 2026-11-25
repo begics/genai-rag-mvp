@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.begics.rag.contract.ApiModels.SourceReference;
 import com.begics.rag.domain.RetrievedChunk;
 import com.begics.rag.service.WorkspaceAccessService;
+import com.begics.rag.store.IndexingJobStore.IndexingJob;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -95,6 +96,46 @@ class JdbcDocumentStoreIntegrationTest {
         select embedding_model from chunks c join documents d on d.id = c.document_id
          where d.id = ?::uuid
         """, String.class, secondDocumentId)).isEqualTo("old-model");
+  }
+
+  @Test
+  void listsIndexedDocumentsAndChunkCountsOnlyForTheirWorkspace() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    JdbcTemplate jdbc = jdbc();
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", firstWorkspace, "First");
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", secondWorkspace, "Second");
+    store.save(firstWorkspace, "uploads/first/notes.txt",
+        List.of("first chunk", "second chunk"), List.of(vector(1, 0), vector(0, 1)), "test-model", null);
+    store.save(secondWorkspace, "uploads/second/private.pdf",
+        List.of("private chunk"), List.of(vector(1, 0)), "test-model", null);
+
+    assertThat(store.listDocuments(firstWorkspace))
+        .extracting(DocumentStore.IndexedDocument::source, DocumentStore.IndexedDocument::chunks)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple("uploads/first/notes.txt", 2));
+  }
+
+  @Test
+  void persistsIndexingJobStagesAndRecentWorkspaceStatus() {
+    UUID workspaceId = UUID.randomUUID();
+    jdbc().update("insert into workspaces(id, name) values (?, ?)", workspaceId, "Jobs");
+    IndexingJobStore jobs = new IndexingJobStore(jdbc());
+    IndexingJob created = jobs.create(workspaceId, "uploads/file/notes.txt", "uploads/file/notes.txt", null);
+
+    assertThat(created.stage()).isEqualTo(IndexingJobStore.Stage.QUEUED);
+    assertThat(jobs.markProcessing(created.id())).isTrue();
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.CHUNKING);
+    assertThat(jobs.get(created.id(), workspaceId).orElseThrow().stage())
+        .isEqualTo(IndexingJobStore.Stage.CHUNKING);
+    jobs.complete(created.id(), 3);
+
+    assertThat(jobs.recent(workspaceId))
+        .singleElement()
+        .satisfies(job -> {
+          assertThat(job.status()).isEqualTo("COMPLETED");
+          assertThat(job.stage()).isEqualTo(IndexingJobStore.Stage.COMPLETED);
+          assertThat(job.chunks()).isEqualTo(3);
+        });
   }
 
   @Test
@@ -267,7 +308,7 @@ class JdbcDocumentStoreIntegrationTest {
   }
 
   @Test
-  void provisionsPrivateWorkspacesAndEnforcesExplicitMembership() {
+  void provisionsPrivateWorkspacesAndEnforcesOwnerOnlyAccess() {
     WorkspaceAccessService access = new WorkspaceAccessService(jdbc());
     var alice = new TestingAuthenticationToken("alice-sub", null, "ROLE_USER");
     var bob = new TestingAuthenticationToken("bob-sub", null, "ROLE_USER");
@@ -279,11 +320,9 @@ class JdbcDocumentStoreIntegrationTest {
         .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
         .hasMessageContaining("Workspace access denied");
 
-    var shared = access.create(alice, "Team");
-    assertThat(access.addMember(alice, shared.id(), "bob-sub").role()).isEqualTo("MEMBER");
-    assertThat(access.resolve(bob, shared.id().toString())).isEqualTo(shared.id());
-    access.removeMember(alice, shared.id(), "bob-sub");
-    assertThatThrownBy(() -> access.resolve(bob, shared.id().toString()))
+    var aliceTeam = access.create(alice, "Team");
+    assertThat(access.resolve(alice, aliceTeam.id().toString())).isEqualTo(aliceTeam.id());
+    assertThatThrownBy(() -> access.resolve(bob, aliceTeam.id().toString()))
         .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
   }
 
