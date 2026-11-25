@@ -1,0 +1,36 @@
+spring:
+  application.name: genai-rag-mvp
+  config.import: optional:file:.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 101MB
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/rag}
+    username: ${DATABASE_USERNAME:rag}
+    password: ${DATABASE_PASSWORD:rag}
+  flyway:
+    enabled: true
+    placeholders:
+      embeddingDimensions: 1536
+app.security:
+  username: ${APP_USERNAME}
+  password: ${APP_PASSWORD}
+app.s3:
+  endpoint: ${S3_ENDPOINT:http://localhost:9000}
+  region: ${S3_REGION:us-east-1}
+  access-key: ${S3_ACCESS_KEY:local-access-key}
+  secret-key: ${S3_SECRET_KEY:local-secret-key}
+  bucket: ${S3_BUCKET:rag-documents}
+management.endpoints.web.exposure.include: health,info
+management.endpoint.health.probes.enabled: true
+server.forward-headers-strategy: framework
+rag:
+  provider: ${RAG_PROVIDER:offline}
+  embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
+  infomaniak:
+    product-id: ${INFOMANIAK_AI_PRODUCT_ID:}
+    api-key: ${INFOMANIAK_AI_API_KEY:}
+    chat-model: ${INFOMANIAK_AI_CHAT_MODEL:}
+    embedding-model: ${INFOMANIAK_AI_EMBEDDING_MODEL:}
+    rerank-model: ${INFOMANIAK_AI_RERANK_MODEL:}

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "27"
+          cache: maven
+
+      - name: Create non-secret test environment
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_USERNAME=rag
+          DATABASE_PASSWORD=ci-database-password
+          APP_USERNAME=rag
+          APP_PASSWORD=ci-app-password
+          S3_ACCESS_KEY=ci-access-key
+          S3_SECRET_KEY=ci-storage-password
+          S3_REGION=us-east-1
+          S3_BUCKET=rag-documents
+          RAG_PROVIDER=offline
+          RAG_EMBEDDING_DIMENSIONS=1536
+          EOF
+
+      - name: Verify Docker Compose configuration
+        run: docker compose config --quiet
+
+      - name: Run tests
+        run: ./mvnw -B test
+
+      - name: Build application image
+        run: docker build --tag genai-rag-mvp:ci .

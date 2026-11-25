@@ -1,0 +1,15 @@
+# Infomaniak Kubernetes credentials
+*-kubeconfig
+*.kubeconfig
+kubeconfig
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+
+# Maven build output
+target/
+
+# Local IDE configuration
+.idea/

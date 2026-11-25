@@ -1,0 +1,109 @@
+package com.begics.rag.storage;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.http.AbortableInputStream;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+
+class S3DocumentReaderTest {
+  private final S3Client s3 = mock(S3Client.class);
+  private final S3DocumentReader reader = new S3DocumentReader(s3, "rag-documents");
+
+  @Test
+  void readsUtf8ObjectFromConfiguredBucketAndKey() {
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream("hello RustFS".getBytes(StandardCharsets.UTF_8)));
+
+    assertThat(reader.read("notes.txt")).isEqualTo("hello RustFS");
+    verify(s3).getObject(GetObjectRequest.builder().bucket("rag-documents").key("notes.txt").build());
+  }
+
+  @Test
+  void extractsTextFromPdfObjects() throws IOException {
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(pdf("Text extracted from PDF")));
+
+    assertThat(reader.read("notes.pdf")).contains("Text extracted from PDF");
+  }
+
+  @Test
+  void rejectsMalformedPdfObjects() {
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream("%PDF-not valid".getBytes(StandardCharsets.US_ASCII)));
+
+    assertThatThrownBy(() -> reader.read("broken.pdf"))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void rejectsOversizedObjects() {
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(new byte[20 * 1024 * 1024 + 1]));
+
+    assertThatThrownBy(() -> reader.read("large.txt"))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+  }
+
+  @Test
+  void acceptsObjectsAtTheTwentyMebibyteLimit() {
+    byte[] content = new byte[20 * 1024 * 1024];
+    java.util.Arrays.fill(content, (byte) 'a');
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(content));
+
+    assertThat(reader.read("limit.txt")).hasSize(content.length);
+  }
+
+  @Test
+  void reportsMissingObjectsAsNotFound() {
+    when(s3.getObject(any(GetObjectRequest.class)))
+        .thenThrow(NoSuchKeyException.builder().message("missing").build());
+
+    assertThatThrownBy(() -> reader.read("missing.txt"))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  private static ResponseInputStream<GetObjectResponse> stream(byte[] bytes) {
+    return new ResponseInputStream<>(
+        GetObjectResponse.builder().build(),
+        AbortableInputStream.create(new ByteArrayInputStream(bytes)));
+  }
+
+  private static byte[] pdf(String text) throws IOException {
+    try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+        content.beginText();
+        content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+        content.newLineAtOffset(50, 700);
+        content.showText(text);
+        content.endText();
+      }
+      document.save(output);
+      return output.toByteArray();
+    }
+  }
+}

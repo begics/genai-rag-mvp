@@ -1,0 +1,36 @@
+[
+  {
+    "question": "orchid calibration instructions",
+    "expectedSource": "orchid-manual.txt",
+    "queryVector": [1.0, 0.0],
+    "documents": [
+      {
+        "source": "orchid-manual.txt",
+        "text": "orchid calibration instructions: turn the dial twice",
+        "vector": [0.8, 0.6]
+      },
+      {
+        "source": "general-notes.txt",
+        "text": "background notes on unrelated topics",
+        "vector": [1.0, 0.0]
+      }
+    ]
+  },
+  {
+    "question": "configure the turquoise apparatus",
+    "expectedSource": "equipment-guide.txt",
+    "queryVector": [1.0, 0.0],
+    "documents": [
+      {
+        "source": "equipment-guide.txt",
+        "text": "configure cyan equipment using the start dial",
+        "vector": [0.9, 0.1]
+      },
+      {
+        "source": "red-device-manual.txt",
+        "text": "red device maintenance and repair",
+        "vector": [0.0, 1.0]
+      }
+    ]
+  }
+]

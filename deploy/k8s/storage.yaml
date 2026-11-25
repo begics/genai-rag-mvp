@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: postgres-data, namespace: genai-rag}
+spec:
+  storageClassName: csi-cinder-sc-retain
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 10Gi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: minio-data, namespace: genai-rag}
+spec:
+  storageClassName: csi-cinder-sc-retain
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 20Gi}}

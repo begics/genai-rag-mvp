@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>RAG Assistant</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    header { background: #102a43; color: white; padding: 22px max(24px, calc((100% - 1040px) / 2)); }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: 5px 0 0; color: #c5d5e5; font-size: .9rem; }
+    main { max-width: 1040px; margin: 32px auto; padding: 0 20px; display: grid; gap: 20px; }
+    section { background: white; border: 1px solid #dce4ee; border-radius: 12px; padding: 24px; box-shadow: 0 5px 18px #102a4309; }
+    h2 { margin: 0 0 6px; font-size: 1.12rem; }
+    .hint { margin: 0 0 18px; color: #536579; font-size: .92rem; line-height: 1.5; }
+    .drop-zone { border: 2px dashed #9aacc0; background: #f8fafc; border-radius: 9px; padding: 22px; text-align: center; }
+    .drop-zone.dragging { border-color: #1769aa; background: #edf6ff; }
+    input[type=file] { display: block; max-width: 100%; margin: 0 auto 12px; }
+    button { border: 0; border-radius: 7px; background: #1769aa; color: white; font: inherit; font-weight: 650; padding: 10px 16px; cursor: pointer; }
+    button:hover { background: #105788; }
+    button:disabled { opacity: .55; cursor: wait; }
+    button.secondary { background: #e8f1f8; color: #164b70; }
+    button.secondary:hover { background: #d7e7f3; }
+    .file-list { list-style: none; margin: 14px 0 0; padding: 0; }
+    .file-row { border-top: 1px solid #e5ebf2; padding: 14px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .file-name { font-weight: 650; overflow-wrap: anywhere; }
+    .file-status { color: #536579; font-size: .87rem; margin-top: 4px; }
+    .row-action { flex-shrink: 0; }
+    .chat-log { min-height: 64px; display: grid; gap: 12px; margin: 18px 0; }
+    .message { border-radius: 9px; padding: 13px 15px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message.user { margin-left: 12%; background: #eaf3fb; }
+    .message.assistant { margin-right: 12%; background: #f3f6f9; }
+    .sources { margin: 10px 0 0; padding-left: 20px; color: #43576b; font-size: .88rem; }
+    form.ask { display: flex; gap: 10px; }
+    form.ask input { flex: 1; min-width: 0; border: 1px solid #b8c5d3; border-radius: 7px; padding: 11px 12px; font: inherit; }
+    .notice { color: #536579; font-size: .84rem; margin: 12px 0 0; }
+    .error { color: #a12622; }
+    @media (max-width: 600px) {
+      main { margin: 18px auto; padding: 0 12px; }
+      section { padding: 18px; }
+      .file-row { display: block; }
+      .row-action { margin-top: 10px; }
+      form.ask { flex-direction: column; }
+      .message.user, .message.assistant { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RAG Assistant</h1>
+    <p>Upload source files and ask questions grounded in your knowledge base.</p>
+  </header>
+  <main>
+    <section aria-labelledby="upload-title">
+      <h2 id="upload-title">Upload files</h2>
+      <p class="hint">Files are stored in your private object storage. Text and PDF files can be indexed for chat. Audio and video are stored but are not transcribed or searchable yet.</p>
+      <div class="drop-zone" id="drop-zone">
+        <input id="file-input" type="file" multiple accept=".txt,.md,.csv,.pdf,.mp4,.mov,.m4v,.webm,.mp3,.wav,.m4a,.aac,.ogg,.flac">
+        <button id="upload-button" type="button">Upload selected files</button>
+        <p class="notice">Maximum file size: 100 MiB. Supported: TXT, Markdown, CSV, PDF, MP4, MOV, M4V, WebM, MP3, WAV, M4A, AAC, OGG, FLAC.</p>
+      </div>
+      <ul class="file-list" id="file-list" aria-live="polite"></ul>
+    </section>
+    <section aria-labelledby="chat-title">
+      <h2 id="chat-title">Ask your knowledge base</h2>
+      <p class="hint">Ask about indexed documents. Answers include the source references used.</p>
+      <div class="chat-log" id="chat-log" aria-live="polite"></div>
+      <form class="ask" id="ask-form">
+        <input id="question" name="question" type="text" maxlength="10000" placeholder="Ask a question..." required>
+        <button id="ask-button" type="submit">Send</button>
+      </form>
+      <p class="notice" id="chat-status" role="status"></p>
+    </section>
+  </main>
+  <script>
+    const fileInput = document.getElementById("file-input");
+    const uploadButton = document.getElementById("upload-button");
+    const fileList = document.getElementById("file-list");
+    const dropZone = document.getElementById("drop-zone");
+    const chatLog = document.getElementById("chat-log");
+
+    async function responseJson(response) {
+      const body = await response.text();
+      let payload;
+      try { payload = body ? JSON.parse(body) : {}; } catch { payload = {}; }
+      if (!response.ok) {
+        throw new Error(payload.detail || payload.message || payload.error || `Request failed (${response.status})`);
+      }
+      return payload;
+    }
+
+    function addMessage(text, kind, sources) {
+      const message = document.createElement("div");
+      message.className = `message ${kind}`;
+      message.textContent = text;
+      if (sources && sources.length) {
+        const list = document.createElement("ul");
+        list.className = "sources";
+        for (const source of sources) {
+          const item = document.createElement("li");
+          item.textContent = `${source.source} — chunk ${source.chunk + 1}`;
+          list.append(item);
+        }
+        message.append(list);
+      }
+      chatLog.append(message);
+      message.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return message;
+    }
+
+    function addFileRow(file) {
+      const row = document.createElement("li");
+      row.className = "file-row";
+      const details = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "file-name";
+      name.textContent = file.name;
+      const status = document.createElement("div");
+      status.className = "file-status";
+      status.textContent = "Uploading...";
+      details.append(name, status);
+      row.append(details);
+      fileList.prepend(row);
+      return { row, status };
+    }
+
+    async function uploadFile(file) {
+      const { row, status } = addFileRow(file);
+      try {
+        const data = new FormData();
+        data.append("file", file);
+        const uploaded = await responseJson(await fetch("/api/uploads", { method: "POST", body: data }));
+        status.textContent = `Stored in S3 (${(uploaded.sizeBytes / 1024 / 1024).toFixed(2)} MiB).`;
+        if (uploaded.indexable) {
+          const indexButton = document.createElement("button");
+          indexButton.type = "button";
+          indexButton.className = "secondary row-action";
+          indexButton.textContent = "Index for chat";
+          indexButton.addEventListener("click", async () => {
+            indexButton.disabled = true;
+            status.textContent = "Indexing document...";
+            try {
+              const job = await responseJson(await fetch("/api/indexing-jobs/s3", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: uploaded.key })
+              }));
+              status.textContent = "Indexing document...";
+              let result = job;
+              let attempts = 0;
+              while ((result.status === "QUEUED" || result.status === "PROCESSING") && attempts < 600) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                result = await responseJson(await fetch(`/api/indexing-jobs/${job.id}`));
+                attempts++;
+              }
+              if (result.status === "QUEUED" || result.status === "PROCESSING") {
+                throw new Error("Indexing is still running. Refresh the page and check the job status.");
+              }
+              if (result.status !== "COMPLETED") {
+                throw new Error(result.errorMessage || "Document indexing failed.");
+              }
+              status.textContent = `Indexed successfully (${result.chunks} chunks).`;
+              indexButton.remove();
+            } catch (error) {
+              status.textContent = error.message;
+              status.className = "file-status error";
+              indexButton.disabled = false;
+            }
+          });
+          row.append(indexButton);
+        } else {
+          status.textContent += " Transcription is not configured; this file is not searchable in chat.";
+        }
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = "file-status error";
+      }
+    }
+
+    uploadButton.addEventListener("click", async () => {
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) return;
+      uploadButton.disabled = true;
+      for (const file of files) await uploadFile(file);
+      uploadButton.disabled = false;
+      fileInput.value = "";
+    });
+
+    for (const eventName of ["dragenter", "dragover"]) {
+      dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropZone.classList.add("dragging");
+      });
+    }
+    for (const eventName of ["dragleave", "drop"]) {
+      dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropZone.classList.remove("dragging");
+      });
+    }
+    dropZone.addEventListener("drop", event => {
+      if (event.dataTransfer.files.length) {
+        fileInput.files = event.dataTransfer.files;
+      }
+    });
+
+    document.getElementById("ask-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const questionInput = document.getElementById("question");
+      const askButton = document.getElementById("ask-button");
+      const chatStatus = document.getElementById("chat-status");
+      const question = questionInput.value.trim();
+      if (!question) return;
+      addMessage(question, "user");
+      questionInput.value = "";
+      askButton.disabled = true;
+      chatStatus.textContent = "Thinking...";
+      try {
+        const result = await responseJson(await fetch("/api/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question })
+        }));
+        addMessage(result.answer, "assistant", result.sources);
+        chatStatus.textContent = "";
+      } catch (error) {
+        chatStatus.textContent = error.message;
+        chatStatus.className = "notice error";
+      } finally {
+        askButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

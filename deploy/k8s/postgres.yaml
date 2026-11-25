@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: postgres, namespace: genai-rag}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg17
+          ports: [{containerPort: 5432}]
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 20
+          env:
+            - {name: POSTGRES_DB, value: rag}
+            - {name: POSTGRES_USER, value: rag}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: genai-rag-secrets, key: DATABASE_PASSWORD}}}
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: postgres-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: genai-rag}
+spec:
+  type: ClusterIP
+  selector: {app: postgres}
+  ports: [{port: 5432, targetPort: 5432}]
