@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -113,6 +114,12 @@ class SecurityConfigurationTest {
     mvc.perform(get("/demo.html"))
         .andExpect(status().isOk())
         .andExpect(content().string(org.hamcrest.Matchers.containsString("prepared responses")));
+    mvc.perform(get("/").header("Host", "ai-demo.begic.ch"))
+        .andExpect(status().isOk())
+        .andExpect(forwardedUrl("/demo.html"));
+    mvc.perform(get("/").header("Host", "ai-rag.begic.ch"))
+        .andExpect(status().isOk())
+        .andExpect(forwardedUrl("/index.html"));
     mvc.perform(get("/demo.css")).andExpect(status().isOk());
     mvc.perform(get("/demo.js"))
         .andExpect(status().isOk())

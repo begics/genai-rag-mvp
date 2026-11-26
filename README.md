@@ -26,7 +26,7 @@ The endpoint returns `202 Accepted` and a job ID. Check progress with `GET /api/
 
 The UI shows the complete file-indexing and question-answering flows at the top of the page, including object storage, the PostgreSQL job queue and pgvector index, Spring workers and RAG API, embedding and reranking services, and the chat LLM. After sign-in it displays the configured provider and model IDs; recent workspace jobs show their persisted stage and final result, refreshing every three seconds while work is active.
 
-The public `/demo.html` page is a self-contained showcase with fictional documents and prepared example answers. It makes no API or model-provider calls, stores nothing, and is separate from authenticated workspaces. For a partner demo, point the Cloudflare Tunnel public hostname `ai-demo.begic.ch` to `http://app:8080`; visit `https://ai-demo.begic.ch/demo.html`. The private application remains at `/` and continues to require sign-in for workspace APIs.
+The public demo is a self-contained showcase with fictional documents and prepared example answers. It makes no API or model-provider calls, stores nothing, and is separate from authenticated workspaces. Point the Cloudflare Tunnel public hostname `ai-demo.begic.ch` to `http://app:8080`; its root URL `https://ai-demo.begic.ch/` serves the demo directly. The private application remains at `https://ai-rag.begic.ch/` and continues to require sign-in for workspace APIs.
 
 Alternatively, enqueue text directly with `POST /api/indexing-jobs`:
 
