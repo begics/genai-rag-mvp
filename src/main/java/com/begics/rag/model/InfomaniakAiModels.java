@@ -1,5 +1,6 @@
 package com.begics.rag.model;
 
+import java.nio.charset.StandardCharsets;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
@@ -8,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriUtils;
 
 @Configuration
 @ConditionalOnProperty(name = "rag.provider", havingValue = "infomaniak")
@@ -115,6 +117,19 @@ public class InfomaniakAiModels {
 
     String rerankUrl() {
       return "https://api.infomaniak.com/2/ai/" + productId + "/cohere/v2/rerank";
+    }
+
+    String transcriptionUrl() {
+      return "https://api.infomaniak.com/1/ai/" + productId + "/openai/audio/transcriptions";
+    }
+
+    String transcriptionResultUrl(String batchId) {
+      return "https://api.infomaniak.com/1/ai/" + productId + "/results/"
+          + UriUtils.encodePathSegment(batchId, StandardCharsets.UTF_8);
+    }
+
+    String transcriptionDownloadUrl(String batchId) {
+      return transcriptionResultUrl(batchId) + "/download";
     }
   }
 }

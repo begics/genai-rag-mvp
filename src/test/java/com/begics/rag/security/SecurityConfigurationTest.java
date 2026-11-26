@@ -113,7 +113,9 @@ class SecurityConfigurationTest {
   void servesTheSelfContainedSampleDemoWithoutAuthentication() throws Exception {
     mvc.perform(get("/demo.html"))
         .andExpect(status().isOk())
-        .andExpect(content().string(org.hamcrest.Matchers.containsString("prepared responses")));
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("Prepared-answer prototype")))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString(
+            "href=\"https://ai-rag.begic.ch/\"")));
     mvc.perform(get("/").header("Host", "ai-demo.begic.ch"))
         .andExpect(status().isOk())
         .andExpect(forwardedUrl("/demo.html"));

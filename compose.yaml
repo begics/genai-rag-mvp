@@ -30,6 +30,7 @@ services:
       - /tmp
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
+    restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
@@ -95,6 +96,7 @@ services:
           --uusername "$$KEYCLOAK_ADMIN_USERNAME" --rolename ADMIN
   postgres:
     image: pgvector/pgvector:pg17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rag}
       POSTGRES_USER: ${DATABASE_USERNAME:-rag}
@@ -112,6 +114,7 @@ services:
       retries: 10
   rustfs:
     image: rustfs/rustfs:1.0.6
+    restart: unless-stopped
     command: ["/data"]
     environment:
       RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
@@ -144,6 +147,7 @@ services:
           aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$S3_BUCKET"
   app:
     build: .
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -171,6 +175,8 @@ services:
     image: cloudflare/cloudflared:2026.11.2
     profiles: ["cloudflare-tunnel"]
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       app:
         condition: service_started

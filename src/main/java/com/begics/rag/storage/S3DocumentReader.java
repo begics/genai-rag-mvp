@@ -5,6 +5,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import com.begics.rag.domain.SpeechTranscription;
+import com.begics.rag.domain.TranscriptionFormats;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -25,10 +27,13 @@ public class S3DocumentReader {
 
   private final S3Client s3;
   private final String bucket;
+  private final SpeechTranscription transcription;
 
-  public S3DocumentReader(S3Client s3, @Value("${app.s3.bucket}") String bucket) {
+  public S3DocumentReader(
+      S3Client s3, @Value("${app.s3.bucket}") String bucket, SpeechTranscription transcription) {
     this.s3 = s3;
     this.bucket = bucket;
+    this.transcription = transcription;
   }
 
   public String read(String key) {
@@ -46,6 +51,13 @@ public class S3DocumentReader {
     } catch (IOException e) {
       throw new IllegalStateException("Failed to read S3 object", e);
     }
+    if (TranscriptionFormats.supports(key)) {
+      if (!transcription.available()) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "Audio/video transcription requires RAG_PROVIDER=infomaniak");
+      }
+      return transcription.transcribe(key.substring(key.lastIndexOf('/') + 1), content);
+    }
     if (isPdf(content) || key.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
       return extractPdfText(content);
     }
@@ -58,6 +70,10 @@ public class S3DocumentReader {
     } catch (CharacterCodingException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "S3 object must be UTF-8 text or a readable PDF", e);
     }
+  }
+
+  public static boolean isTranscribable(String filename) {
+    return TranscriptionFormats.supports(filename);
   }
 
   private static boolean isPdf(byte[] content) {

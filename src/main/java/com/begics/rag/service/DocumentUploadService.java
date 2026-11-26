@@ -1,6 +1,7 @@
 package com.begics.rag.service;
 
 import com.begics.rag.contract.ApiModels;
+import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,28 +22,34 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DocumentUploadService {
   private static final long MAX_FILE_BYTES = 100L * 1024 * 1024;
+  private static final long MAX_TRANSCRIPTION_FILE_BYTES = 20L * 1024 * 1024;
   private static final Map<String, FileType> ALLOWED_TYPES = Map.ofEntries(
       Map.entry("txt", new FileType("text/plain", true)),
       Map.entry("md", new FileType("text/markdown", true)),
       Map.entry("csv", new FileType("text/csv", true)),
       Map.entry("pdf", new FileType("application/pdf", true)),
-      Map.entry("mp4", new FileType("video/mp4", false)),
+      Map.entry("mp4", new FileType("video/mp4", false, true)),
       Map.entry("mov", new FileType("video/quicktime", false)),
       Map.entry("m4v", new FileType("video/x-m4v", false)),
-      Map.entry("webm", new FileType("video/webm", false)),
-      Map.entry("mp3", new FileType("audio/mpeg", false)),
-      Map.entry("wav", new FileType("audio/wav", false)),
-      Map.entry("m4a", new FileType("audio/mp4", false)),
-      Map.entry("aac", new FileType("audio/aac", false)),
-      Map.entry("ogg", new FileType("audio/ogg", false)),
-      Map.entry("flac", new FileType("audio/flac", false)));
+      Map.entry("webm", new FileType("video/webm", false, true)),
+      Map.entry("mp3", new FileType("audio/mpeg", false, true)),
+      Map.entry("opus", new FileType("audio/ogg", false, true)),
+      Map.entry("wma", new FileType("audio/x-ms-wma", false, true)),
+      Map.entry("wav", new FileType("audio/wav", false, true)),
+      Map.entry("m4a", new FileType("audio/mp4", false, true)),
+      Map.entry("aac", new FileType("audio/aac", false, true)),
+      Map.entry("ogg", new FileType("audio/ogg", false, true)),
+      Map.entry("flac", new FileType("audio/flac", false, true)));
 
   private final S3ObjectWriter objectWriter;
   private final StorageQuotaService storageQuota;
+  private final SpeechTranscription transcription;
 
-  public DocumentUploadService(S3ObjectWriter objectWriter, StorageQuotaService storageQuota) {
+  public DocumentUploadService(
+      S3ObjectWriter objectWriter, StorageQuotaService storageQuota, SpeechTranscription transcription) {
     this.objectWriter = objectWriter;
     this.storageQuota = storageQuota;
+    this.transcription = transcription;
   }
 
   @Transactional
@@ -66,13 +73,17 @@ public class DocumentUploadService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Supported file types are text, PDF, video, and audio files");
     }
+    if (fileType.transcribable() && file.getSize() > MAX_TRANSCRIPTION_FILE_BYTES) {
+      throw new ResponseStatusException(
+          HttpStatus.PAYLOAD_TOO_LARGE, "Audio/video files for transcription must be 20 MiB or smaller");
+    }
     validateContent(file, extension);
     storageQuota.checkS3Upload(subject, workspaceId, file.getSize());
 
     String key = "uploads/" + workspaceId + "/" + UUID.randomUUID() + "/" + filename;
     objectWriter.write(key, fileType.contentType(), file);
     return new ApiModels.UploadResponse(key, filename, fileType.contentType(), file.getSize(),
-        fileType.indexable());
+        fileType.indexable() || (fileType.transcribable() && transcription.available()));
   }
 
   public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId) {
@@ -97,7 +108,7 @@ public class DocumentUploadService {
       if (isText(extension)) {
         validateUtf8(input);
       } else {
-        byte[] signature = input.readNBytes(12);
+        byte[] signature = input.readNBytes(16);
         if (!matchesSignature(extension, signature)) {
           throw invalidContent();
         }
@@ -133,7 +144,11 @@ public class DocumentUploadService {
           && (!extension.equals("mov") || asciiAt(bytes, 8, "qt  "));
       case "webm" -> startsWith(bytes, new byte[] {0x1a, 0x45, (byte) 0xdf, (byte) 0xa3});
       case "wav" -> bytes.length >= 12 && asciiAt(bytes, 0, "RIFF") && asciiAt(bytes, 8, "WAVE");
-      case "ogg" -> asciiAt(bytes, 0, "OggS");
+      case "ogg", "opus" -> asciiAt(bytes, 0, "OggS");
+      case "wma" -> startsWith(bytes, new byte[] {
+          0x30, 0x26, (byte) 0xb2, 0x75, (byte) 0x8e, 0x66, (byte) 0xcf, 0x11,
+          (byte) 0xa6, (byte) 0xd9, 0x00, (byte) 0xaa, 0x00, 0x62, (byte) 0xce, 0x6c
+      });
       case "flac" -> asciiAt(bytes, 0, "fLaC");
       case "mp3" -> asciiAt(bytes, 0, "ID3") || hasMpegFrameSync(bytes);
       case "aac" -> hasMpegFrameSync(bytes);
@@ -167,5 +182,9 @@ public class DocumentUploadService {
         "File content does not match its supported file type");
   }
 
-  private record FileType(String contentType, boolean indexable) {}
+  private record FileType(String contentType, boolean indexable, boolean transcribable) {
+    FileType(String contentType, boolean indexable) {
+      this(contentType, indexable, false);
+    }
+  }
 }

@@ -25,7 +25,8 @@ public final class ApiModels {
       String provider, String embeddingService, String embeddingModel, int embeddingDimensions,
       String rerankService, String rerankModel, String chatService, String chatModel) {}
   public record StorageFileResponse(
-      String key, String filename, long sizeBytes, boolean indexed, int chunks, long indexedBytes) {}
+      String key, String filename, long sizeBytes, boolean indexed, boolean indexable, int chunks,
+      long indexedBytes) {}
   public record StorageUsageResponse(
       long s3UsedBytes, long s3LimitBytes, long indexUsedBytes, long indexLimitBytes,
       List<StorageFileResponse> files) {}

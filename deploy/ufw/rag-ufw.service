@@ -1,0 +1,13 @@
+[Unit]
+Description=Configure UFW for the RAG Docker host and Cloudflare SSH
+After=ufw.service docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/configure-rag-ufw
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

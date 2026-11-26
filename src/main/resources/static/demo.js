@@ -6,7 +6,7 @@ const examples = [
   },
   {
     matches: ["source", "pilot", "come from", "citation", "where"],
-    answer: "The pilot retrieves relevant passages from the indexed documents, reranks them, and returns an answer with references to the supporting source documents.",
+    answer: "A live system can retrieve relevant passages, rerank them, and return an answer with references to supporting source documents. This page illustrates that flow with a prepared example.",
     sources: ["Knowledge assistant pilot · passage 3", "Knowledge assistant pilot · passage 5"]
   },
   {

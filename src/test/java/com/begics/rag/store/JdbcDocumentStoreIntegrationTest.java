@@ -285,6 +285,8 @@ class JdbcDocumentStoreIntegrationTest {
     IndexingJobStore jobs = new IndexingJobStore(jdbc());
     IndexingJobStore.IndexingJob created = jobs.create(
         JdbcDocumentStore.LEGACY_WORKSPACE_ID, "job-source.txt", null, "content for indexing");
+    IndexingJobStore.IndexingJob transcription = jobs.create(
+        JdbcDocumentStore.LEGACY_WORKSPACE_ID, "uploads/audio.mp3", "uploads/audio.mp3", null);
     IndexingJobStore.IndexingJob reembed = jobs.createReembed(JdbcDocumentStore.LEGACY_WORKSPACE_ID);
 
     assertThat(created.status()).isEqualTo("QUEUED");
@@ -293,9 +295,15 @@ class JdbcDocumentStoreIntegrationTest {
     assertThat(reembed.jobType()).isEqualTo("REEMBED");
     assertThat(reembed.objectKey()).isNull();
     assertThat(reembed.content()).isNull();
+    assertThat(jobs.markProcessing(transcription.id())).isTrue();
+    jobs.updateStage(transcription.id(), IndexingJobStore.Stage.TRANSCRIBING);
     assertThat(jobs.markProcessing(created.id())).isTrue();
     jobs.recoverProcessingJobs();
     assertThat(jobs.get(created.id()).orElseThrow().status()).isEqualTo("QUEUED");
+    var failedTranscription = jobs.get(transcription.id()).orElseThrow();
+    assertThat(failedTranscription.status()).isEqualTo("FAILED");
+    assertThat(failedTranscription.errorMessage()).contains("Re-index the file to retry");
+    assertThat(failedTranscription.objectKey()).isNull();
     assertThat(jobs.markProcessing(created.id())).isTrue();
     jobs.complete(created.id(), 3);
     assertThat(jobs.get(created.id()).orElseThrow().chunks()).isEqualTo(3);

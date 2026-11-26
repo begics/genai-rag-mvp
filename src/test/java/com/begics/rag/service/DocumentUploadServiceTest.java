@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -17,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 class DocumentUploadServiceTest {
   private final S3ObjectWriter objectWriter = org.mockito.Mockito.mock(S3ObjectWriter.class);
   private final StorageQuotaService storageQuota = org.mockito.Mockito.mock(StorageQuotaService.class);
-  private final DocumentUploadService service = new DocumentUploadService(objectWriter, storageQuota);
+  private final SpeechTranscription transcription = org.mockito.Mockito.mock(SpeechTranscription.class);
+  private final DocumentUploadService service =
+      new DocumentUploadService(objectWriter, storageQuota, transcription);
 
   @Test
   void uploadsTextAndPdfAsIndexableFiles() {
@@ -49,6 +52,18 @@ class DocumentUploadServiceTest {
       assertThat(uploaded.indexable()).isFalse();
       verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
     }
+  }
+
+  @Test
+  void marksSupportedAudioAsIndexableWhenTranscriptionIsConfigured() {
+    org.mockito.Mockito.when(transcription.available()).thenReturn(true);
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "talk.mp3", "application/octet-stream", "ID3".getBytes(StandardCharsets.US_ASCII));
+
+    var uploaded = service.upload(file);
+
+    assertThat(uploaded.indexable()).isTrue();
+    verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
   }
 
   @Test

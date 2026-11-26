@@ -3,6 +3,7 @@ package com.begics.rag.service;
 import com.begics.rag.contract.ApiModels.StorageFileResponse;
 import com.begics.rag.contract.ApiModels.StorageUsageResponse;
 import com.begics.rag.domain.StorageLimits;
+import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
 import com.begics.rag.store.DocumentStore;
 import com.begics.rag.store.IndexingJobStore;
@@ -22,13 +23,16 @@ public class StorageQuotaService {
   private final S3ObjectWriter objects;
   private final DocumentStore documents;
   private final IndexingJobStore jobs;
+  private final SpeechTranscription transcription;
 
   public StorageQuotaService(
-      JdbcTemplate jdbc, S3ObjectWriter objects, DocumentStore documents, IndexingJobStore jobs) {
+      JdbcTemplate jdbc, S3ObjectWriter objects, DocumentStore documents, IndexingJobStore jobs,
+      SpeechTranscription transcription) {
     this.jdbc = jdbc;
     this.objects = objects;
     this.documents = documents;
     this.jobs = jobs;
+    this.transcription = transcription;
   }
 
   @Transactional
@@ -58,6 +62,7 @@ public class StorageQuotaService {
           DocumentStore.IndexedDocument document = indexed.get(object.key());
           String name = object.key().substring(object.key().lastIndexOf('/') + 1);
           return new StorageFileResponse(object.key(), name, object.sizeBytes(), document != null,
+              document != null || isIndexable(name),
               document == null ? 0 : document.chunks(),
               document == null ? 0 : document.indexedBytes());
         })
@@ -65,6 +70,12 @@ public class StorageQuotaService {
         .toList();
     return new StorageUsageResponse(s3Bytes, StorageLimits.USER_LIMIT_BYTES,
         indexBytes, StorageLimits.USER_LIMIT_BYTES, files);
+  }
+
+  private boolean isIndexable(String filename) {
+    String lower = filename.toLowerCase(java.util.Locale.ROOT);
+    return lower.matches(".*\\.(txt|md|csv|pdf)$")
+        || (transcription.available() && transcription.supports(filename));
   }
 
   @Transactional

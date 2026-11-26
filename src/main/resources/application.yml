@@ -61,3 +61,6 @@ rag:
     chat-model: ${INFOMANIAK_AI_CHAT_MODEL:}
     embedding-model: ${INFOMANIAK_AI_EMBEDDING_MODEL:}
     rerank-model: ${INFOMANIAK_AI_RERANK_MODEL:}
+    transcription:
+      poll-interval-ms: ${INFOMANIAK_AI_TRANSCRIPTION_POLL_INTERVAL_MS:2000}
+      timeout-ms: ${INFOMANIAK_AI_TRANSCRIPTION_TIMEOUT_MS:300000}

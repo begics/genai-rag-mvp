@@ -3,6 +3,7 @@ package com.begics.rag.service;
 import com.begics.rag.store.IndexingJobStore;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
 import com.begics.rag.store.IndexingJobStore.Stage;
+import com.begics.rag.storage.S3DocumentReader;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +38,8 @@ public class IndexingJobWorker {
         if (job.objectKey() == null) {
           text = job.content();
         } else {
-          jobs.updateStage(id, Stage.READING);
+          jobs.updateStage(id, S3DocumentReader.isTranscribable(job.objectKey())
+              ? Stage.TRANSCRIBING : Stage.READING);
           text = ragService.readS3Document(job.objectKey());
         }
         var result = ragService.indexText(

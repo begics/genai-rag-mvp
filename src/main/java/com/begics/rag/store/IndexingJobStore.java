@@ -82,8 +82,15 @@ public class IndexingJobStore {
   public void recoverProcessingJobs() {
     jdbc.update("""
         update indexing_jobs
+           set status = 'FAILED', stage = 'FAILED',
+               error_message = 'Application restarted during Whisper transcription. Re-index the file to retry.',
+               object_key = null, content = null, updated_at = now()
+         where status = 'PROCESSING' and stage = 'TRANSCRIBING'
+        """);
+    jdbc.update("""
+        update indexing_jobs
            set status = 'QUEUED', stage = 'QUEUED', updated_at = now()
-         where status = 'PROCESSING'
+         where status = 'PROCESSING' and stage <> 'TRANSCRIBING'
         """);
   }
 
@@ -137,6 +144,6 @@ public class IndexingJobStore {
       String errorMessage, String jobType, UUID workspaceId) {}
 
   public enum Stage {
-    QUEUED, READING, CHUNKING, EMBEDDING, SAVING, REINDEXING, COMPLETED, FAILED
+    QUEUED, READING, TRANSCRIBING, CHUNKING, EMBEDDING, SAVING, REINDEXING, COMPLETED, FAILED
   }
 }

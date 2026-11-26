@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import com.begics.rag.domain.SpeechTranscription;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -28,7 +29,8 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 class S3DocumentReaderTest {
   private final S3Client s3 = mock(S3Client.class);
-  private final S3DocumentReader reader = new S3DocumentReader(s3, "rag-documents");
+  private final SpeechTranscription transcription = mock(SpeechTranscription.class);
+  private final S3DocumentReader reader = new S3DocumentReader(s3, "rag-documents", transcription);
 
   @Test
   void readsUtf8ObjectFromConfiguredBucketAndKey() {
@@ -72,6 +74,17 @@ class S3DocumentReaderTest {
     when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(content));
 
     assertThat(reader.read("limit.txt")).hasSize(content.length);
+  }
+
+  @Test
+  void transcribesSupportedAudioObjects() {
+    byte[] audio = "ID3 audio".getBytes(StandardCharsets.US_ASCII);
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(audio));
+    when(transcription.available()).thenReturn(true);
+    when(transcription.transcribe("talk.mp3", audio)).thenReturn("Searchable speech transcript");
+
+    assertThat(reader.read("uploads/workspace/talk.mp3")).isEqualTo("Searchable speech transcript");
+    verify(transcription).transcribe("talk.mp3", audio);
   }
 
   @Test

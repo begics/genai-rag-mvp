@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="description" content="An interactive, privacy-safe walkthrough of a document AI assistant.">
   <title>AI Knowledge Assistant · Demo</title>
@@ -16,56 +16,17 @@
     </a>
     <div class="top-actions">
       <span class="safe-label"><span class="safe-dot"></span>Sample data · no uploads</span>
-      <a class="button button-outline" href="/">Private workspace</a>
+      <a class="button button-outline" href="https://ai-rag.begic.ch/">Private workspace</a>
     </div>
   </header>
   <main>
     <section class="hero">
       <p class="eyebrow">Retrieval-augmented generation</p>
       <h1>Answers grounded in<br><span>your knowledge.</span></h1>
-      <p class="hero-copy">Explore how documents become searchable, how relevant passages are retrieved, and how an AI assistant turns them into cited answers.</p>
+      <p class="hero-copy">Try a short example, inspect the evidence, and see how a document assistant can support decisions with source-backed answers.</p>
       <a class="button button-primary" href="#try-it">Try the sample <span aria-hidden="true">↓</span></a>
-      <p class="privacy-copy">This public walkthrough uses fictional sample content and prepared responses. It does not call an AI provider or access private workspaces.</p>
-    </section>
-
-    <section class="architecture panel" aria-labelledby="architecture-title">
-      <div class="section-heading">
-        <div><p class="eyebrow">Behind the answer</p><h2 id="architecture-title">A complete RAG pipeline</h2></div>
-        <span class="mode-badge">Illustrative architecture</span>
-      </div>
-      <div class="flow-lane">
-        <h3><span>01</span> Prepare knowledge</h3>
-        <ol class="flow">
-          <li><b>Private upload</b><small>Browser</small></li>
-          <li><b>Original file</b><small>RustFS · S3</small></li>
-          <li><b>Durable job</b><small>PostgreSQL</small></li>
-          <li><b>Extract text</b><small>Spring Boot · PDFBox</small></li>
-          <li><b>Split passages</b><small>1,500 chars · overlap</small></li>
-          <li><b>Create vectors</b><small>Infomaniak AI · embeddings</small></li>
-          <li><b>Store &amp; index</b><small>PostgreSQL · pgvector</small></li>
-        </ol>
-      </div>
-      <div class="flow-lane">
-        <h3><span>02</span> Find a grounded answer</h3>
-        <ol class="flow">
-          <li><b>Ask</b><small>Browser</small></li>
-          <li><b>Authenticate</b><small>Keycloak · OIDC</small></li>
-          <li><b>Embed question</b><small>Infomaniak AI</small></li>
-          <li><b>Find passages</b><small>Hybrid search · pgvector</small></li>
-          <li><b>Rerank</b><small>BAAI/bge-reranker-v2-m3</small></li>
-          <li><b>Generate answer</b><small>Infomaniak AI · chat LLM</small></li>
-          <li><b>Cite sources</b><small>Passages → browser</small></li>
-        </ol>
-      </div>
-      <div class="components" aria-label="Technologies in this application">
-        <span><b>Application</b> Spring Boot</span>
-        <span><b>Identity</b> Keycloak · OIDC</span>
-        <span><b>Object storage</b> RustFS · S3</span>
-        <span><b>Database</b> PostgreSQL · pgvector</span>
-        <span><b>Embeddings</b> bge_multilingual_gemma2 · 3,584 dimensions</span>
-        <span><b>Reranker</b> BAAI/bge-reranker-v2-m3</span>
-        <span><b>Chat</b> Infomaniak AI · OpenAI-compatible API</span>
-      </div>
+      <a class="button button-outline hero-secondary" href="https://ai-rag.begic.ch/">Open the private app</a>
+      <p class="privacy-copy">Interactive prototype · fictional documents · prepared answers only. No live AI or private data is used.</p>
     </section>
 
     <section class="demo-grid" id="try-it">
@@ -76,14 +37,14 @@
         </div>
         <div class="document">
           <span class="doc-icon" aria-hidden="true">TXT</span>
-          <div><strong>Responsible AI guide</strong><small>Sample policy · 4 indexed passages</small></div>
-          <span class="indexed"><span></span>Indexed</span>
+          <div><strong>Responsible AI guide</strong><small>Sample policy · 4 example passages</small></div>
+          <span class="sample-label">Example</span>
         </div>
         <p class="excerpt">“AI-generated content should be reviewed by a subject-matter expert before it informs a customer, employee, or operational decision.”</p>
         <div class="document">
           <span class="doc-icon doc-icon-blue" aria-hidden="true">PDF</span>
-          <div><strong>Knowledge assistant pilot</strong><small>Sample project brief · 6 indexed passages</small></div>
-          <span class="indexed"><span></span>Indexed</span>
+          <div><strong>Knowledge assistant pilot</strong><small>Sample project brief · 6 example passages</small></div>
+          <span class="sample-label">Example</span>
         </div>
         <p class="excerpt">“The pilot uses hybrid search to retrieve relevant passages and returns answers with links to their source documents.”</p>
         <div class="data-note"><strong>Privacy by design</strong><br>These fictional examples are built into this page. Nothing is uploaded or stored.</div>
@@ -92,8 +53,9 @@
       <article class="panel chat-panel">
         <div class="section-heading">
           <div><p class="eyebrow">Try a sample question</p><h2>Ask the knowledge assistant</h2></div>
-          <span class="demo-badge"><span></span>Interactive demo</span>
+          <span class="demo-badge"><span></span>Prepared-answer prototype</span>
         </div>
+        <p class="demo-intro">Choose a question to see a sample answer and its example source.</p>
         <div class="question-list" aria-label="Example questions">
           <button type="button" class="question" data-question="How should AI-generated content be used?">How should AI-generated content be used?</button>
           <button type="button" class="question" data-question="How does the pilot show where answers come from?">How does the pilot show its sources?</button>
@@ -104,26 +66,71 @@
           <input id="question-input" maxlength="300" placeholder="Choose or type a sample question…" autocomplete="off">
           <button class="button button-primary" type="submit">Ask</button>
         </form>
-        <p class="demo-disclaimer" id="demo-status" role="status" aria-live="polite">Prepared sample answers only — no live AI call is made.</p>
+        <p class="demo-disclaimer" id="demo-status" role="status" aria-live="polite">Prepared sample answers only — no AI provider is contacted.</p>
         <section id="answer" class="answer" hidden aria-live="polite">
-          <div class="answer-meta"><span class="assistant-icon" aria-hidden="true">✦</span><strong>Assistant</strong><span>Grounded answer</span></div>
+          <div class="answer-meta"><span class="assistant-icon" aria-hidden="true">✦</span><strong>Sample assistant</strong><span>Example answer</span></div>
           <p id="answer-text"></p>
           <div class="reasoning">
-            <h3>What happened</h3>
+            <h3>In this prototype</h3>
             <ol>
-              <li><span>1</span>Question matched against the sample knowledge base</li>
-              <li><span>2</span>Relevant passages selected and reranked</li>
-              <li><span>3</span>Answer linked to its supporting sources</li>
+              <li><span>1</span>Your question is matched to a prepared example</li>
+              <li><span>2</span>A sample response is displayed</li>
+              <li><span>3</span>Example source labels are shown</li>
             </ol>
           </div>
-          <div class="citations"><strong>Sources</strong><ul id="source-list"></ul></div>
+          <div class="citations"><strong>Example sources</strong><ul id="source-list"></ul></div>
         </section>
       </article>
     </section>
 
+    <details class="architecture-disclosure">
+      <summary>Explore how a live RAG system works <span>Architecture overview</span></summary>
+      <section class="architecture panel" aria-labelledby="architecture-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">Behind the answer</p><h2 id="architecture-title">A complete RAG pipeline</h2></div>
+        <span class="mode-badge">Illustrative architecture</span>
+      </div>
+      <p class="pipeline-intro">A live assistant prepares documents once, then retrieves the most useful evidence for each question. Each step solves a different problem; skip one and answers can become harder to find, less reliable, or impossible to verify.</p>
+      <div class="flow-lane">
+        <h3><span>01</span> Prepare knowledge · indexing happens when documents are added</h3>
+        <ol class="flow">
+          <li><b>Upload &amp; authorize</b><small>Browser · Keycloak · workspace</small><p>Checks who is uploading and which workspace they may use. This keeps one user's documents separate from another's.</p></li>
+          <li><b>Keep the original</b><small>RustFS · S3</small><p>Stores the source file durably, so it can be reprocessed and the answer can point back to the original document.</p></li>
+          <li><b>Queue an indexing job</b><small>PostgreSQL · job status</small><p>Tracks progress and failures outside the upload request. Large files can be processed reliably without making the browser wait.</p></li>
+          <li><b>Extract readable content</b><small>Spring Boot · PDFBox · optional transcription</small><p>Turns supported files into text. Audio transcription is used when enabled; retrieval needs text to search.</p></li>
+          <li><b>Split into passages</b><small>Up to 1,500 characters · overlap</small><p>Creates focused, manageable pieces while overlap preserves context across boundaries. Smaller passages make evidence easier to find.</p></li>
+          <li><b>Embed each passage</b><small>Infomaniak AI · embeddings</small><p>Maps meaning to a numerical vector. Similar ideas can then match even when a question uses different wording.</p></li>
+          <li><b>Save text &amp; vectors</b><small>PostgreSQL · pgvector · full-text index</small><p>Keeps passages, vectors, document references, and workspace ownership together for fast, scoped retrieval later.</p></li>
+        </ol>
+      </div>
+      <div class="flow-lane">
+        <h3><span>02</span> Find a grounded answer · repeated for each question</h3>
+        <ol class="flow">
+          <li><b>Ask &amp; check access</b><small>Browser · Keycloak · OIDC</small><p>Receives the question and verifies the signed-in user's workspace before searching private content.</p></li>
+          <li><b>Embed the question</b><small>Same embedding model</small><p>Converts the question into the same vector space as the passages, making semantic comparison possible.</p></li>
+          <li><b>Retrieve candidates</b><small>Hybrid search · pgvector + full text</small><p>Combines meaning-based search with exact word matching. This helps find both paraphrases and important names or terms.</p></li>
+          <li><b>Rerank for relevance</b><small>BAAI/bge-reranker-v2-m3</small><p>Scores candidate passages against the full question and moves the strongest evidence to the top.</p></li>
+          <li><b>Build focused context</b><small>Best-matching passages</small><p>Selects a small set of relevant evidence for the model. Focus reduces distraction and keeps the prompt within its limits.</p></li>
+          <li><b>Generate from evidence</b><small>Infomaniak AI · chat LLM</small><p>Uses the question and retrieved context to draft a useful response. If retrieval finds no evidence, the system can abstain instead of guessing.</p></li>
+          <li><b>Return answer &amp; sources</b><small>Passages → browser</small><p>Includes document and passage references so a person can check where the answer came from.</p></li>
+        </ol>
+      </div>
+      <p class="pipeline-note"><strong>What this demo does:</strong> this page uses fictional sample documents and prepared answers; it does not run these live AI or retrieval steps. The pipeline above explains the live application's architecture.</p>
+      <div class="components" aria-label="Technologies in this application">
+        <span><b>Application</b> Spring Boot</span>
+        <span><b>Identity</b> Keycloak · OIDC</span>
+        <span><b>Object storage</b> RustFS · S3</span>
+        <span><b>Database</b> PostgreSQL · pgvector</span>
+        <span><b>Embeddings</b> bge_multilingual_gemma2 · 3,584 dimensions</span>
+        <span><b>Reranker</b> BAAI/bge-reranker-v2-m3</span>
+        <span><b>Chat</b> Infomaniak AI · OpenAI-compatible API</span>
+      </div>
+      </section>
+    </details>
+
     <section class="closing panel">
       <div><p class="eyebrow">Ready to explore the application?</p><h2>From prototype to private workspace.</h2><p>Sign in to upload your own documents and follow indexing jobs in your private workspace.</p></div>
-      <a class="button button-primary" href="/">Open the private app <span aria-hidden="true">→</span></a>
+      <a class="button button-primary" href="https://ai-rag.begic.ch/">Open the private app <span aria-hidden="true">→</span></a>
     </section>
   </main>
   <footer><span>Begic AI · RAG application demonstration</span><span>Fictional data · no live provider calls</span></footer>
