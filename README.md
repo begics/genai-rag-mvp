@@ -26,7 +26,7 @@ The endpoint returns `202 Accepted` and a job ID. Check progress with `GET /api/
 
 The UI shows the complete file-indexing and question-answering flows at the top of the page, including object storage, the PostgreSQL job queue and pgvector index, Spring workers and RAG API, embedding and reranking services, and the chat LLM. After sign-in it displays the configured provider and model IDs; recent workspace jobs show their persisted stage and final result, refreshing every three seconds while work is active.
 
-The public `/demo.html` page is a self-contained showcase with fictional documents and prepared example answers. It makes no API or model-provider calls, stores nothing, and is separate from authenticated workspaces. For a partner demo, point a Cloudflare Tunnel public hostname such as `ai.begic.ch` to `http://app:8080`; visit `https://ai.begic.ch/demo.html`. The private application remains at `/` and continues to require sign-in for workspace APIs.
+The public `/demo.html` page is a self-contained showcase with fictional documents and prepared example answers. It makes no API or model-provider calls, stores nothing, and is separate from authenticated workspaces. For a partner demo, point the Cloudflare Tunnel public hostname `ai-demo.begic.ch` to `http://app:8080`; visit `https://ai-demo.begic.ch/demo.html`. The private application remains at `/` and continues to require sign-in for workspace APIs.
 
 Alternatively, enqueue text directly with `POST /api/indexing-jobs`:
 
@@ -76,4 +76,4 @@ The Compose stack also includes Portainer CE at `https://localhost:9443` for Doc
 
 Traefik is an opt-in alternative origin proxy under the `traefik` Compose profile and publishes ports 80 and 443. It is not enabled by the `public` profile; do not enable it when the VM is served through Cloudflare Tunnel.
 
-To use Cloudflare Tunnel, create a remotely managed tunnel in Cloudflare Zero Trust and add its token as `CLOUDFLARED_TUNNEL_TOKEN` in `.env`. Configure public hostnames `ai-rag.begic.ch` → `http://app:8080` and `auth.begic.ch` → `http://keycloak:8080` in the tunnel dashboard, then start the tunnel with `docker compose --profile cloudflare-tunnel up -d cloudflared`. The cloudflared container joins the Compose network and makes outbound connections only; it does not publish ports.
+To use Cloudflare Tunnel, create a remotely managed tunnel in Cloudflare Zero Trust and add its token as `CLOUDFLARED_TUNNEL_TOKEN` in `.env`. Configure public hostnames `ai-rag.begic.ch` and `ai-demo.begic.ch` → `http://app:8080`, and `auth.begic.ch` → `http://keycloak:8080` in the tunnel dashboard, then start the tunnel with `docker compose --profile cloudflare-tunnel up -d cloudflared`. The cloudflared container joins the Compose network and makes outbound connections only; it does not publish ports.
