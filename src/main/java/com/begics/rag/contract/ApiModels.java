@@ -24,4 +24,9 @@ public final class ApiModels {
   public record PipelineInfoResponse(
       String provider, String embeddingService, String embeddingModel, int embeddingDimensions,
       String rerankService, String rerankModel, String chatService, String chatModel) {}
+  public record StorageFileResponse(
+      String key, String filename, long sizeBytes, boolean indexed, int chunks, long indexedBytes) {}
+  public record StorageUsageResponse(
+      long s3UsedBytes, long s3LimitBytes, long indexUsedBytes, long indexLimitBytes,
+      List<StorageFileResponse> files) {}
 }

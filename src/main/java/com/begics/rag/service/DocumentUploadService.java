@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,12 +38,15 @@ public class DocumentUploadService {
       Map.entry("flac", new FileType("audio/flac", false)));
 
   private final S3ObjectWriter objectWriter;
+  private final StorageQuotaService storageQuota;
 
-  public DocumentUploadService(S3ObjectWriter objectWriter) {
+  public DocumentUploadService(S3ObjectWriter objectWriter, StorageQuotaService storageQuota) {
     this.objectWriter = objectWriter;
+    this.storageQuota = storageQuota;
   }
 
-  public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId) {
+  @Transactional
+  public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId, String subject) {
     if (file.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a non-empty file to upload");
     }
@@ -63,6 +67,7 @@ public class DocumentUploadService {
           "Supported file types are text, PDF, video, and audio files");
     }
     validateContent(file, extension);
+    storageQuota.checkS3Upload(subject, workspaceId, file.getSize());
 
     String key = "uploads/" + workspaceId + "/" + UUID.randomUUID() + "/" + filename;
     objectWriter.write(key, fileType.contentType(), file);
@@ -70,8 +75,16 @@ public class DocumentUploadService {
         fileType.indexable());
   }
 
+  public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId) {
+    return upload(file, workspaceId, "legacy-test-subject");
+  }
+
   public ApiModels.UploadResponse upload(MultipartFile file) {
-    return upload(file, WorkspaceAccessService.LEGACY_WORKSPACE_ID);
+    return upload(file, WorkspaceAccessService.LEGACY_WORKSPACE_ID, "legacy-test-subject");
+  }
+
+  public void delete(String key, UUID workspaceId, String subject) {
+    storageQuota.delete(subject, workspaceId, key);
   }
 
   private static String extensionOf(String filename) {

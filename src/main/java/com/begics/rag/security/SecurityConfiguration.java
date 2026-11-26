@@ -42,8 +42,8 @@ public class SecurityConfiguration {
   // CSP hashes authorize only the inline UI blocks; refresh them when those blocks change.
   private static final String CONTENT_SECURITY_POLICY =
       "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-          + "form-action 'self'; script-src 'self' 'sha256-oS5tjNC5eihP02JIZztJrl1MSqpw+g3ieO+HnOzM6o4='; "
-          + "style-src 'self' 'sha256-tJxzv6Ndm8RaJ7mZtd2ff9cvjPeBtm07j5ooxD2hI68='; "
+          + "form-action 'self'; script-src 'self' 'sha256-4kqzMwTUYHlP1qqOsuWiCFIlT5QqqX+Q8VmCo55Lx4k='; "
+          + "style-src 'self' 'sha256-WZLUOwyyCeDqkQbJhHqltUpPRl0F69UHI2M1/tuvuE8='; "
           + "img-src 'self' data:; connect-src 'self'";
 
   @Bean
@@ -64,7 +64,7 @@ public class SecurityConfiguration {
             .ignoringRequestMatchers(SecurityConfiguration::isBearerRequest))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(authorize -> authorize
-            .requestMatchers("/", "/index.html", "/favicon.ico",
+            .requestMatchers("/", "/index.html", "/demo.html", "/demo.css", "/demo.js", "/favicon.ico",
                 "/actuator/health", "/actuator/health/**", "/oauth2/**", "/login/**").permitAll()
             .anyRequest().authenticated())
         .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(

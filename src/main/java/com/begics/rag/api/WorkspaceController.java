@@ -5,6 +5,7 @@ import com.begics.rag.contract.ApiModels.IndexedDocumentResponse;
 import com.begics.rag.service.WorkspaceAccessService;
 import com.begics.rag.service.WorkspaceAccessService.Workspace;
 import com.begics.rag.service.IndexedDocumentService;
+import com.begics.rag.service.StorageQuotaService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -22,10 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkspaceController {
   private final WorkspaceAccessService workspaces;
   private final IndexedDocumentService documents;
+  private final StorageQuotaService storage;
 
-  public WorkspaceController(WorkspaceAccessService workspaces, IndexedDocumentService documents) {
+  public WorkspaceController(
+      WorkspaceAccessService workspaces, IndexedDocumentService documents, StorageQuotaService storage) {
     this.workspaces = workspaces;
     this.documents = documents;
+    this.storage = storage;
   }
 
   @GetMapping("/me")
@@ -43,6 +47,12 @@ public class WorkspaceController {
   public List<IndexedDocumentResponse> documents(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace) {
     return documents.list(workspaces.resolve(authentication, workspace));
+  }
+
+  @GetMapping("/storage")
+  public ApiModels.StorageUsageResponse storage(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace) {
+    return storage.usage(authentication.getName(), workspaces.resolve(authentication, workspace));
   }
 
   @PostMapping("/workspaces")

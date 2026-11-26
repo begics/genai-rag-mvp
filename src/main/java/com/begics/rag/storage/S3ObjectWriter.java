@@ -7,6 +7,9 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 @Component
 public class S3ObjectWriter {
@@ -30,4 +33,28 @@ public class S3ObjectWriter {
       throw new IllegalStateException("Failed to upload file to S3", e);
     }
   }
+
+  public java.util.List<StoredObject> list(String prefix) {
+    var objects = new java.util.ArrayList<StoredObject>();
+    String continuationToken = null;
+    do {
+      var request = ListObjectsV2Request.builder()
+          .bucket(bucket)
+          .prefix(prefix)
+          .continuationToken(continuationToken)
+          .build();
+      var response = s3.listObjectsV2(request);
+      response.contents().stream()
+          .map(object -> new StoredObject(object.key(), object.size()))
+          .forEach(objects::add);
+      continuationToken = response.nextContinuationToken();
+    } while (continuationToken != null);
+    return java.util.List.copyOf(objects);
+  }
+
+  public void delete(String key) {
+    s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+  }
+
+  public record StoredObject(String key, long sizeBytes) {}
 }

@@ -1,6 +1,7 @@
 package com.begics.rag.store;
 
 import com.begics.rag.domain.RetrievedChunk;
+import com.begics.rag.domain.StorageLimits;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -8,6 +9,8 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Repository
 public class JdbcDocumentStore implements DocumentStore {
@@ -23,7 +26,15 @@ public class JdbcDocumentStore implements DocumentStore {
     if (chunks.size() != embeddings.size()) {
       throw new IllegalArgumentException("Each chunk must have exactly one embedding");
     }
-    String id = documentId == null ? UUID.randomUUID().toString() : documentId.toString();
+    String owner = ownerOf(workspaceId);
+    if (owner != null) {
+      lockUser(owner);
+    }
+    String existingId = jdbc.query("""
+        select id::text from documents where workspace_id = ? and source = ? limit 1
+        """, rs -> rs.next() ? rs.getString(1) : null, workspaceId, source);
+    String id = existingId != null ? existingId
+        : documentId == null ? UUID.randomUUID().toString() : documentId.toString();
     jdbc.update("""
         insert into documents(id, source, workspace_id) values (?::uuid, ?, ?)
         on conflict (id) do update set source = excluded.source, workspace_id = excluded.workspace_id
@@ -34,6 +45,12 @@ public class JdbcDocumentStore implements DocumentStore {
           insert into chunks(document_id, chunk_no, content, embedding, embedding_model)
           values (?::uuid, ?, ?, ?::halfvec, ?)
           """, id, i, chunks.get(i), vector(embeddings.get(i)), embeddingModel);
+    }
+    long indexedBytes = owner == null ? 0 : indexedBytesForOwner(owner);
+    if (owner != null && indexedBytes > StorageLimits.USER_LIMIT_BYTES) {
+      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+          "This operation would increase indexed data to " + StorageLimits.formatBytes(indexedBytes)
+              + ", above your 1 GB limit. Delete indexed files to free space, then try again.");
     }
     return id;
   }
@@ -46,13 +63,43 @@ public class JdbcDocumentStore implements DocumentStore {
   @Override
   public List<IndexedDocument> listDocuments(UUID workspaceId) {
     return jdbc.query("""
-        select d.id::text, d.source, count(c.id)::integer
+        select d.id::text, d.source, count(c.id)::integer,
+               coalesce(sum(coalesce(pg_column_size(c.content), 0) + coalesce(pg_column_size(c.embedding), 0)
+                            + coalesce(pg_column_size(c.search_vector), 0)), 0)::bigint
           from documents d left join chunks c on c.document_id = d.id
          where d.workspace_id = ?
          group by d.id, d.source, d.created_at
          order by d.created_at desc, d.source
-        """, (rs, row) -> new IndexedDocument(rs.getString(1), rs.getString(2), rs.getInt(3)),
+        """, (rs, row) -> new IndexedDocument(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getLong(4)),
         workspaceId);
+  }
+
+  @Override
+  @Transactional
+  public void deleteBySource(UUID workspaceId, String source) {
+    jdbc.update("delete from documents where workspace_id = ? and source = ?", workspaceId, source);
+  }
+
+  private String ownerOf(UUID workspaceId) {
+    return jdbc.query("""
+        select subject from workspace_members where workspace_id = ? and role = 'OWNER' limit 1
+        """, rs -> rs.next() ? rs.getString(1) : null, workspaceId);
+  }
+
+  private void lockUser(String subject) {
+    jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?, 0))::text", String.class, subject);
+  }
+
+  private long indexedBytesForOwner(String subject) {
+    Long bytes = jdbc.queryForObject("""
+        select coalesce(sum(coalesce(pg_column_size(c.content), 0) + coalesce(pg_column_size(c.embedding), 0)
+                            + coalesce(pg_column_size(c.search_vector), 0)), 0)
+          from chunks c
+          join documents d on d.id = c.document_id
+          join workspace_members m on m.workspace_id = d.workspace_id and m.role = 'OWNER'
+         where m.subject = ?
+        """, Long.class, subject);
+    return bytes == null ? 0 : bytes;
   }
 
   @Override
@@ -104,7 +151,12 @@ public class JdbcDocumentStore implements DocumentStore {
   }
 
   @Override
+  @Transactional
   public void updateEmbedding(UUID workspaceId, long chunkId, float[] embedding, String embeddingModel) {
+    String owner = ownerOf(workspaceId);
+    if (owner != null) {
+      lockUser(owner);
+    }
     int updated = jdbc.update("""
         update chunks c set embedding = ?::halfvec, embedding_model = ?
           from documents d
@@ -112,6 +164,12 @@ public class JdbcDocumentStore implements DocumentStore {
         """, vector(embedding), embeddingModel, workspaceId, chunkId);
     if (updated != 1) {
       throw new IllegalStateException("Expected to update one embedding for chunk " + chunkId);
+    }
+    long indexedBytes = owner == null ? 0 : indexedBytesForOwner(owner);
+    if (owner != null && indexedBytes > StorageLimits.USER_LIMIT_BYTES) {
+      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+          "Re-indexing would increase indexed data to " + StorageLimits.formatBytes(indexedBytes)
+              + ", above your 1 GB limit. Delete indexed files to free space, then try again.");
     }
   }
 

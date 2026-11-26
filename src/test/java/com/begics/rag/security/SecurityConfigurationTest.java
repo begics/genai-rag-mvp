@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,6 +20,7 @@ import com.begics.rag.contract.ApiModels.S3IngestRequest;
 import com.begics.rag.service.DocumentUploadService;
 import com.begics.rag.service.IndexingJobService;
 import com.begics.rag.service.PipelineInfoService;
+import com.begics.rag.service.StorageQuotaService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import com.begics.rag.contract.ApiModels.IndexedDocumentResponse;
@@ -81,6 +83,9 @@ class SecurityConfigurationTest {
   private IndexedDocumentService indexedDocumentService;
 
   @MockitoBean
+  private StorageQuotaService storageQuotaService;
+
+  @MockitoBean
   private PipelineInfoService pipelineInfoService;
 
   @MockitoBean
@@ -99,7 +104,20 @@ class SecurityConfigurationTest {
         .andExpect(status().isUnauthorized());
     mvc.perform(get("/api/csrf")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/storage")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/pipeline-info")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void servesTheSelfContainedSampleDemoWithoutAuthentication() throws Exception {
+    mvc.perform(get("/demo.html"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("prepared responses")));
+    mvc.perform(get("/demo.css")).andExpect(status().isOk());
+    mvc.perform(get("/demo.js"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("Prepared sample response")));
+    mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
   }
 
   @Test

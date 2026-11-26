@@ -125,6 +125,16 @@
     .upload-button:hover { background: var(--blue-dark); }
     .upload-button:disabled { opacity: .52; cursor: not-allowed; }
     .upload-limit { margin: 10px 0 0; color: #929eae; font-size: .7rem; line-height: 1.45; }
+    .storage-usage { margin: 14px 0 0; padding: 11px; border: 1px solid #e8edf5; border-radius: 9px; background: #fbfcfe; }
+    .storage-meter + .storage-meter { margin-top: 10px; }
+    .storage-meter-label { display: flex; justify-content: space-between; gap: 8px; color: #526174; font-size: .68rem; }
+    .storage-meter-label strong { color: #354359; }
+    .storage-meter progress { display: block; width: 100%; height: 7px; margin-top: 5px; overflow: hidden; border: 0; border-radius: 9px; background: #e9edf4; accent-color: #315ee8; }
+    .storage-meter progress::-webkit-progress-bar { border-radius: 9px; background: #e9edf4; }
+    .storage-meter progress::-webkit-progress-value { border-radius: 9px; background: #5278f4; }
+    .storage-meter progress::-moz-progress-bar { border-radius: 9px; background: #5278f4; }
+    .storage-message { margin: 8px 0 0; color: #77869a; font-size: .66rem; line-height: 1.45; }
+    .storage-message.error { color: #a12622; }
     .file-list { list-style: none; margin: 15px 0 0; padding: 0; }
     .file-row { padding: 12px 0; border-top: 1px solid #edf0f5; }
     .file-name { color: #354359; font-size: .79rem; font-weight: 650; overflow-wrap: anywhere; }
@@ -160,6 +170,8 @@
     .job-detail.error { color: #a12622; }
     .row-action { margin-top: 8px; padding: 7px 9px; border: 1px solid #dce5ff; border-radius: 7px; color: var(--blue-dark); background: #f5f7ff; font-size: .75rem; font-weight: 650; }
     .row-action:hover { background: #eaf0ff; }
+    .row-action.danger { margin-left: 6px; border-color: #f0d7d4; color: #a12622; background: #fff8f7; }
+    .row-action.danger:hover { background: #fff0ee; }
     .row-action:disabled { opacity: .55; cursor: wait; }
     .privacy-note { margin-top: 18px; padding: 12px; border-radius: 10px; color: #68778a; background: #f7f8fb; font-size: .73rem; line-height: 1.5; }
     .privacy-note strong { color: #46556a; }
@@ -216,6 +228,7 @@
       </div>
     </div>
     <div class="account-actions">
+      <a class="account-link" href="/demo.html">Public demo</a>
       <span class="account-name" id="account-name"></span>
       <a class="account-link" id="login-link" href="/oauth2/authorization/keycloak">Sign in</a>
       <button class="account-button" id="logout-button" type="button" hidden>Sign out</button>
@@ -324,10 +337,21 @@
                  accept=".txt,.md,.csv,.pdf,.mp4,.mov,.m4v,.webm,.mp3,.wav,.m4a,.aac,.ogg,.flac"
                  aria-label="Choose files to upload">
           <button class="upload-button" id="upload-button" type="button" disabled>Choose files to upload</button>
-          <p class="upload-limit">Up to 100 MiB per file · TXT, Markdown, CSV, PDF, audio and video</p>
+          <p class="upload-limit">Up to 100 MiB per file · 1 GB per user for originals and indexed data</p>
         </div>
+        <section class="storage-usage" aria-label="Storage usage">
+          <div class="storage-meter">
+            <div class="storage-meter-label"><strong>Original files · S3</strong><span id="s3-usage-label">Loading…</span></div>
+            <progress id="s3-usage-bar" max="1000000000" value="0" aria-label="S3 storage used"></progress>
+          </div>
+          <div class="storage-meter">
+            <div class="storage-meter-label"><strong>Search index · PostgreSQL</strong><span id="index-usage-label">Loading…</span></div>
+            <progress id="index-usage-bar" max="1000000000" value="0" aria-label="Indexed data used"></progress>
+          </div>
+          <p class="storage-message" id="storage-message" role="status" aria-live="polite">Each limit is 1 GB across all your workspaces.</p>
+        </section>
         <ul class="file-list" id="file-list" aria-live="polite"></ul>
-        <h3 class="indexed-heading">Indexed documents</h3>
+        <h3 class="indexed-heading">Your stored files</h3>
         <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
         <div class="privacy-note"><strong>Private by design.</strong> Files are stored in your configured object storage. Audio and video are stored but are not transcribed or searchable yet.</div>
       </aside>
@@ -338,6 +362,11 @@
     const uploadButton = document.getElementById("upload-button");
     const fileList = document.getElementById("file-list");
     const indexedFileList = document.getElementById("indexed-file-list");
+    const storageMessage = document.getElementById("storage-message");
+    const s3UsageLabel = document.getElementById("s3-usage-label");
+    const s3UsageBar = document.getElementById("s3-usage-bar");
+    const indexUsageLabel = document.getElementById("index-usage-label");
+    const indexUsageBar = document.getElementById("index-usage-bar");
     const indexingJobList = document.getElementById("indexing-job-list");
     const pipelineStatus = document.getElementById("pipeline-status");
     const pipelinePanel = document.querySelector(".pipeline-panel");
@@ -365,6 +394,8 @@
     let isAuthenticated = false;
     let csrfToken;
     let indexingRefreshTimer;
+    let currentStorage;
+    let currentJobs = [];
 
     const stageLabels = {
       QUEUED: "Waiting in the database queue",
@@ -456,10 +487,118 @@
 
     function updateFileSelection() {
       const files = Array.from(fileInput.files || []);
-      uploadButton.disabled = !isAuthenticated || files.length === 0;
+      const selectedBytes = files.reduce((total, file) => total + file.size, 0);
+      const exceedsQuota = currentStorage && currentStorage.s3UsedBytes + selectedBytes > currentStorage.s3LimitBytes;
+      uploadButton.disabled = !isAuthenticated || files.length === 0 || exceedsQuota;
       uploadButton.textContent = files.length
         ? `Upload ${files.length} selected file${files.length === 1 ? "" : "s"}`
         : "Choose files to upload";
+      if (exceedsQuota) {
+        storageMessage.textContent = "These files exceed your remaining S3 space. Delete stored files before uploading.";
+        storageMessage.classList.add("error");
+      } else {
+        storageMessage.textContent = "Each limit is 1 GB across all your workspaces.";
+        storageMessage.classList.remove("error");
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+      if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+      if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} KB`;
+      return `${bytes} bytes`;
+    }
+
+    function isIndexableName(name) {
+      return /\.(txt|md|csv|pdf)$/i.test(name);
+    }
+
+    function renderStorage(storage) {
+      currentStorage = storage;
+      s3UsageLabel.textContent = `${formatBytes(storage.s3UsedBytes)} / 1 GB`;
+      s3UsageBar.value = storage.s3UsedBytes;
+      indexUsageLabel.textContent = `${formatBytes(storage.indexUsedBytes)} / 1 GB`;
+      indexUsageBar.value = storage.indexUsedBytes;
+      fileCount.textContent = String(storage.files.length);
+      fileCount.setAttribute("aria-label", `${storage.files.length} stored file${storage.files.length === 1 ? "" : "s"}`);
+      indexedFileList.replaceChildren();
+      if (!storage.files.length) {
+        const empty = document.createElement("li");
+        empty.className = "indexed-empty";
+        empty.textContent = "No files in S3 yet.";
+        indexedFileList.append(empty);
+        updateFileSelection();
+        return;
+      }
+      for (const file of storage.files) {
+        const row = document.createElement("li");
+        row.className = "file-row";
+        const name = document.createElement("div");
+        name.className = "file-name";
+        name.textContent = file.filename;
+        const details = document.createElement("div");
+        details.className = "file-status";
+        const activeJob = currentJobs.find(job => job.source === file.key
+          && (job.status === "QUEUED" || job.status === "PROCESSING"));
+        if (activeJob) {
+          details.textContent = `Indexing · ${stageLabels[activeJob.stage] || activeJob.stage}`;
+        } else if (file.indexed) {
+          details.textContent = `Indexed · ${file.chunks} chunks · ${formatBytes(file.indexedBytes)} index data`;
+        } else if (isIndexableName(file.filename)) {
+          details.textContent = "Stored in S3 · ready to index";
+        } else {
+          details.textContent = "Stored in S3 · transcription is not configured";
+        }
+        const actions = document.createElement("div");
+        if (isIndexableName(file.filename)) {
+          const indexButton = document.createElement("button");
+          indexButton.type = "button";
+          indexButton.className = "row-action";
+          indexButton.textContent = file.indexed ? "Re-index" : "Index for chat";
+          indexButton.disabled = Boolean(activeJob);
+          indexButton.addEventListener("click", async () => {
+            indexButton.disabled = true;
+            try {
+              await responseJson(await apiFetch("/api/indexing-jobs/s3", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: file.key })
+              }));
+              await refreshIndexingJobs();
+            } catch (error) {
+              storageMessage.textContent = error.message;
+              storageMessage.classList.add("error");
+              indexButton.disabled = false;
+            }
+          });
+          actions.append(indexButton);
+        }
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "row-action danger";
+        deleteButton.textContent = "Delete";
+        deleteButton.disabled = Boolean(activeJob);
+        deleteButton.title = activeJob ? "Wait for indexing to finish before deleting" : "Delete this file and its index";
+        deleteButton.addEventListener("click", async () => {
+          if (!window.confirm(`Delete "${file.filename}" from S3 and remove its indexed data?`)) return;
+          deleteButton.disabled = true;
+          try {
+            await apiFetch(`/api/uploads?${new URLSearchParams({ key: file.key })}`, {
+              method: "DELETE"
+            });
+            await loadStorage();
+            await refreshIndexingJobs();
+          } catch (error) {
+            storageMessage.textContent = error.message;
+            storageMessage.classList.add("error");
+            deleteButton.disabled = false;
+          }
+        });
+        actions.append(deleteButton);
+        row.append(name, details, actions);
+        indexedFileList.append(row);
+      }
+      updateFileSelection();
     }
 
     function addFileRow(file) {
@@ -483,32 +622,8 @@
         data.append("file", file);
         const uploaded = await responseJson(await apiFetch("/api/uploads", { method: "POST", body: data }));
         status.textContent = `Stored in private storage · ${(uploaded.sizeBytes / 1024 / 1024).toFixed(2)} MiB`;
-        if (uploaded.indexable) {
-          const indexButton = document.createElement("button");
-          indexButton.type = "button";
-          indexButton.className = "row-action";
-          indexButton.textContent = "Index for chat";
-          indexButton.addEventListener("click", async () => {
-            indexButton.disabled = true;
-            status.classList.remove("error");
-            status.textContent = "Indexing document...";
-            try {
-              const job = await responseJson(await apiFetch("/api/indexing-jobs/s3", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ key: uploaded.key })
-              }));
-              status.textContent = "Indexing job submitted. Follow its progress below.";
-              indexButton.remove();
-              await refreshIndexingJobs();
-            } catch (error) {
-              status.textContent = error.message;
-              status.classList.add("error");
-              indexButton.disabled = false;
-            }
-          });
-          row.append(indexButton);
-        } else {
+        await loadStorage();
+        if (!uploaded.indexable) {
           status.textContent += " · Transcription is not configured, so it cannot be searched.";
         }
       } catch (error) {
@@ -597,7 +712,7 @@
       sessionStorage.setItem("rag-workspace-id", activeWorkspaceId);
       fileList.replaceChildren();
       refreshIndexingJobs();
-      loadIndexedDocuments();
+      loadStorage();
       chatLog.replaceChildren();
       document.getElementById("clear-chat").click();
     });
@@ -646,7 +761,7 @@
       sessionStorage.setItem("rag-workspace-id", selected);
       workspaceSelect.disabled = false;
       document.getElementById("workspace-create").disabled = false;
-      await loadIndexedDocuments();
+      await loadStorage();
       await refreshIndexingJobs();
       await loadPipelineInfo();
     }
@@ -754,42 +869,29 @@
       if (!isAuthenticated || !activeWorkspaceId) return;
       try {
         const jobs = await responseJson(await apiFetch("/api/indexing-jobs"));
+        currentJobs = jobs;
         renderIndexingJobs(jobs);
+        if (!jobs.some(job => job.status === "QUEUED" || job.status === "PROCESSING")) {
+          await loadStorage();
+        } else if (currentStorage) {
+          renderStorage(currentStorage);
+        }
       } catch (error) {
         pipelineStatus.textContent = `Could not load indexing status: ${error.message}`;
       }
     }
 
-    async function loadIndexedDocuments() {
-      indexedFileList.replaceChildren();
+    async function loadStorage() {
       try {
-        const documents = await responseJson(await apiFetch("/api/documents"));
-        fileCount.textContent = String(documents.length);
-        fileCount.setAttribute("aria-label", `${documents.length} indexed document${documents.length === 1 ? "" : "s"}`);
-        if (!documents.length) {
-          const empty = document.createElement("li");
-          empty.className = "indexed-empty";
-          empty.textContent = "No indexed documents yet.";
-          indexedFileList.append(empty);
-          return;
-        }
-        for (const indexedDocument of documents) {
-          const row = document.createElement("li");
-          row.className = "file-row";
-          const name = document.createElement("div");
-          name.className = "file-name";
-          name.textContent = indexedDocument.source.split("/").pop();
-          const details = document.createElement("div");
-          details.className = "file-status";
-          details.textContent = `Ready to search · ${indexedDocument.chunks} chunks indexed`;
-          row.append(name, details);
-          indexedFileList.append(row);
-        }
+        renderStorage(await responseJson(await apiFetch("/api/storage")));
       } catch (error) {
         const failure = document.createElement("li");
         failure.className = "indexed-empty file-status error";
-        failure.textContent = `Could not load indexed documents: ${error.message}`;
+        failure.textContent = `Could not load storage usage: ${error.message}`;
+        indexedFileList.replaceChildren();
         indexedFileList.append(failure);
+        storageMessage.textContent = error.message;
+        storageMessage.classList.add("error");
       }
     }
 

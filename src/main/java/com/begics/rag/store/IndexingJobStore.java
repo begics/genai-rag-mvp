@@ -67,6 +67,13 @@ public class IndexingJobStore {
             rs.getObject(10, UUID.class)), workspaceId);
   }
 
+  public boolean hasActiveObjectKey(UUID workspaceId, String objectKey) {
+    return Boolean.TRUE.equals(jdbc.queryForObject("""
+        select exists (select 1 from indexing_jobs
+                        where workspace_id = ? and object_key = ? and status in ('QUEUED', 'PROCESSING'))
+        """, Boolean.class, workspaceId, objectKey));
+  }
+
   public List<UUID> queuedIds() {
     return jdbc.query("select id from indexing_jobs where status = 'QUEUED' order by created_at",
         (rs, row) -> rs.getObject(1, UUID.class));

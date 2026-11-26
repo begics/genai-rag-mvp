@@ -12,6 +12,7 @@ import com.begics.rag.service.WorkspaceAccessService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,14 +29,17 @@ class UploadControllerTest {
     UUID workspaceId = UUID.randomUUID();
     when(workspaces.resolve(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
         .thenReturn(workspaceId);
-    when(uploadService.upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId))).thenReturn(
+    when(uploadService.upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId),
+        org.mockito.ArgumentMatchers.eq("test-subject"))).thenReturn(
         new UploadResponse("uploads/id/manual.pdf", "manual.pdf", "application/pdf", 11, true));
 
-    mvc.perform(multipart("/api/uploads").file(file))
+    mvc.perform(multipart("/api/uploads").file(file)
+            .principal(new TestingAuthenticationToken("test-subject", "n/a")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.key").value("uploads/id/manual.pdf"))
         .andExpect(jsonPath("$.indexable").value(true));
 
-    verify(uploadService).upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId));
+    verify(uploadService).upload(any(), org.mockito.ArgumentMatchers.eq(workspaceId),
+        org.mockito.ArgumentMatchers.eq("test-subject"));
   }
 }

@@ -3,6 +3,9 @@ package com.begics.rag.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.begics.rag.storage.S3ObjectWriter;
@@ -13,7 +16,8 @@ import java.nio.charset.StandardCharsets;
 
 class DocumentUploadServiceTest {
   private final S3ObjectWriter objectWriter = org.mockito.Mockito.mock(S3ObjectWriter.class);
-  private final DocumentUploadService service = new DocumentUploadService(objectWriter);
+  private final StorageQuotaService storageQuota = org.mockito.Mockito.mock(StorageQuotaService.class);
+  private final DocumentUploadService service = new DocumentUploadService(objectWriter, storageQuota);
 
   @Test
   void uploadsTextAndPdfAsIndexableFiles() {
@@ -28,6 +32,8 @@ class DocumentUploadServiceTest {
       assertThat(uploaded.key()).startsWith("uploads/");
       verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
     }
+    verify(storageQuota, times(3)).checkS3Upload(eq("legacy-test-subject"),
+        eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), anyLong());
   }
 
   @Test
