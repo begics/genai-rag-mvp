@@ -1,6 +1,10 @@
 package com.begics.rag.model;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
@@ -40,12 +44,25 @@ public class InfomaniakAiModels {
   }
 
   @Bean
-  ChatModel infomaniakChatModel(InfomaniakAiProperties properties) {
+  StructuredChatModel infomaniakChatModel(InfomaniakAiProperties properties) {
     org.springframework.ai.chat.model.ChatModel model = OpenAiChatModel.builder()
         .options(chatOptions(properties))
         .build();
-    return (question, context) -> model.call(
-        "Answer using only the supplied context. Cite its content.\nContext:\n" + context + "\nQuestion:\n" + question);
+    return new StructuredChatModel() {
+      @Override
+      public String answer(String question, String context) {
+        return model.call(
+            "Answer using only the supplied context. Cite its content.\nContext:\n" + context + "\nQuestion:\n" + question);
+      }
+
+      @Override
+      public String answerWithSchema(String instructions, String context, String jsonSchema) {
+        Prompt prompt = new Prompt(
+            List.of(new SystemMessage(instructions), new UserMessage(context)),
+            OpenAiChatOptions.builder().outputSchema(jsonSchema).build());
+        return model.call(prompt).getResult().getOutput().getText();
+      }
+    };
   }
 
   @Bean

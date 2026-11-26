@@ -2,6 +2,7 @@ package com.begics.rag.api;
 
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.service.IndexingJobService;
+import com.begics.rag.service.InvoiceExtractionService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import jakarta.validation.Valid;
@@ -20,10 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class RagController {
   private final RagService service;
   private final IndexingJobService indexingJobs;
+  private final InvoiceExtractionService invoiceExtraction;
   private final WorkspaceAccessService workspaces;
-  public RagController(RagService service, IndexingJobService indexingJobs, WorkspaceAccessService workspaces) {
+  public RagController(RagService service, IndexingJobService indexingJobs,
+      InvoiceExtractionService invoiceExtraction, WorkspaceAccessService workspaces) {
     this.service = service;
     this.indexingJobs = indexingJobs;
+    this.invoiceExtraction = invoiceExtraction;
     this.workspaces = workspaces;
   }
   @PostMapping("/documents")
@@ -77,5 +81,12 @@ public class RagController {
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.QueryRequest request) {
     return service.query(request, workspaces.resolve(authentication, workspace));
+  }
+
+  @PostMapping("/documents/extract-invoice")
+  public ApiModels.InvoiceExtractionResponse extractInvoice(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
+      @Valid @RequestBody ApiModels.InvoiceExtractionRequest request) {
+    return invoiceExtraction.extract(request.key(), workspaces.resolve(authentication, workspace));
   }
 }

@@ -2,6 +2,8 @@ package com.begics.rag.contract;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,6 +25,15 @@ public final class ApiModels {
     }
   }
   public record QueryResponse(String answer, List<SourceReference> sources) {}
+  public record InvoiceExtractionRequest(@NotBlank @Size(max = 500) String key) {}
+  public record InvoiceField<T>(T value, String evidence) {}
+  public record InvoiceExtractionResponse(
+      InvoiceField<String> supplier,
+      InvoiceField<String> invoiceNumber,
+      InvoiceField<LocalDate> invoiceDate,
+      InvoiceField<LocalDate> dueDate,
+      InvoiceField<String> currency,
+      InvoiceField<BigDecimal> total) {}
   public record WorkspaceRequest(@NotBlank @Size(max = 120) String name) {}
   public record IndexedDocumentResponse(String id, String source, int chunks) {}
   public record PipelineInfoResponse(

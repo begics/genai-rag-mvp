@@ -16,6 +16,7 @@ class ModelConfigurationTest {
     contextRunner.withPropertyValues("rag.provider=offline").run(context -> {
       assertThat(context).hasSingleBean(EmbeddingModel.class);
       assertThat(context).hasSingleBean(ChatModel.class);
+      assertThat(context).doesNotHaveBean(StructuredChatModel.class);
       assertThat(context).hasSingleBean(Reranker.class);
     });
   }
@@ -38,6 +39,7 @@ class ModelConfigurationTest {
         "rag.embedding-dimensions=768").run(context -> {
           assertThat(context).hasSingleBean(EmbeddingModel.class);
           assertThat(context).hasSingleBean(ChatModel.class);
+          assertThat(context).hasSingleBean(StructuredChatModel.class);
           assertThat(context).hasSingleBean(Reranker.class);
           assertThat(context).hasSingleBean(InfomaniakSpeechTranscription.class);
           InfomaniakAiModels.InfomaniakAiProperties properties =

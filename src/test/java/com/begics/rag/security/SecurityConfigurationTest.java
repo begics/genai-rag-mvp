@@ -20,6 +20,7 @@ import com.begics.rag.contract.ApiModels.QueryResponse;
 import com.begics.rag.contract.ApiModels.S3IngestRequest;
 import com.begics.rag.service.DocumentUploadService;
 import com.begics.rag.service.IndexingJobService;
+import com.begics.rag.service.InvoiceExtractionService;
 import com.begics.rag.service.PipelineInfoService;
 import com.begics.rag.service.StorageQuotaService;
 import com.begics.rag.service.RagService;
@@ -76,6 +77,9 @@ class SecurityConfigurationTest {
 
   @MockitoBean
   private IndexingJobService indexingJobService;
+
+  @MockitoBean
+  private InvoiceExtractionService invoiceExtractionService;
 
   @MockitoBean
   private WorkspaceAccessService workspaces;

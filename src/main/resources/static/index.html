@@ -173,6 +173,17 @@
     .pipeline-components { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
     .pipeline-component { padding: 6px 9px; border: 1px solid #e7ebf2; border-radius: 7px; color: #58677b; background: #f8f9fc; font-size: .68rem; overflow-wrap: anywhere; }
     .pipeline-component strong { color: #354359; }
+    .pipeline-note { margin: 14px 0 0; padding: 11px 12px; border: 1px solid #e4eaff; border-radius: 9px; color: #64748b; background: #f7f8ff; font-size: .7rem; line-height: 1.55; }
+    .pipeline-note strong { color: #354359; }
+    .pipeline-note a { color: var(--blue-dark); text-underline-offset: 2px; }
+    .invoice-result { margin-top: 9px; border: 1px solid #e2e7ef; border-radius: 8px; background: #fbfcfe; }
+    .invoice-result > summary { padding: 9px 11px; color: #354359; cursor: pointer; font-size: .73rem; font-weight: 650; }
+    .invoice-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0 10px 10px; list-style: none; }
+    .invoice-fields li { min-width: 0; padding: 8px; border: 1px solid #e7ebf2; border-radius: 7px; background: white; }
+    .invoice-fields strong, .invoice-fields span, .invoice-fields small { display: block; overflow-wrap: anywhere; }
+    .invoice-fields strong { color: #526174; font-size: .65rem; }
+    .invoice-fields span { margin-top: 3px; color: #253247; font-size: .72rem; }
+    .invoice-fields small { margin-top: 4px; color: #7b8797; font-size: .63rem; line-height: 1.4; }
     .job-list { margin: 8px 0 0; padding: 0; list-style: none; }
     .job-row { padding: 9px 0; border-top: 1px solid #edf0f5; }
     .job-row:first-child { border-top: 0; }
@@ -230,6 +241,7 @@
       .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .pipeline-step { min-height: 72px; }
       .pipeline-step::after { display: none; }
+      .invoice-fields { grid-template-columns: minmax(0, 1fr); }
       .chat-panel { min-height: 62vh; min-height: 62svh; border-radius: 13px; }
       .chat-header { min-height: 66px; padding: 13px 15px; }
       .chat-log {
@@ -325,6 +337,7 @@
         <span class="pipeline-component"><strong>Object storage:</strong> RustFS · S3 API</span>
         <span class="pipeline-component"><strong>Queue &amp; vector DB:</strong> PostgreSQL · pgvector</span>
       </div>
+      <p class="pipeline-note"><strong>Structured extraction is a different task from RAG.</strong> Extraction models can return typed fields, compute values from supplied facts, or estimate and forecast outcomes. This application currently extracts document text, retrieves passages, and generates answers; it does not use Cloudflare Workers AI extraction models. Typed output and constraints do not guarantee correctness, so validate important values against source evidence and use human review for consequential decisions. <a href="https://developers.cloudflare.com/workers-ai/concepts/extraction-models/" target="_blank" rel="noopener noreferrer">Learn about extraction models</a>.</p>
       <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
     </section>
     </details>
@@ -570,6 +583,39 @@
       return /\.(aac|flac|m4a|mp3|mp4|ogg|opus|wav|webm|wma)$/i.test(name);
     }
 
+    function renderInvoiceResult(result) {
+      const details = document.createElement("details");
+      details.className = "invoice-result";
+      const summary = document.createElement("summary");
+      summary.textContent = "Invoice fields · review before use";
+      const fields = document.createElement("ul");
+      fields.className = "invoice-fields";
+      const labels = [
+        ["Supplier", result.supplier],
+        ["Invoice number", result.invoiceNumber],
+        ["Invoice date", result.invoiceDate],
+        ["Due date", result.dueDate],
+        ["Currency", result.currency],
+        ["Total", result.total]
+      ];
+      for (const [label, field] of labels) {
+        const item = document.createElement("li");
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const value = document.createElement("span");
+        value.textContent = field.value ?? "Not found";
+        item.append(title, value);
+        if (field.evidence) {
+          const evidence = document.createElement("small");
+          evidence.textContent = `Evidence: “${field.evidence}”`;
+          item.append(evidence);
+        }
+        fields.append(item);
+      }
+      details.append(summary, fields);
+      return details;
+    }
+
     function renderStorage(storage) {
       currentStorage = storage;
       s3UsageLabel.textContent = `${formatBytes(storage.s3UsedBytes)} / 1 GB`;
@@ -612,6 +658,7 @@
           details.textContent = "Stored in S3 · this format cannot be indexed";
         }
         const actions = document.createElement("div");
+        const extractionSupported = /\.(txt|md|csv|pdf)$/i.test(file.filename);
         if (file.indexable && file.sizeBytes <= maxIndexFileBytes) {
           const indexButton = document.createElement("button");
           indexButton.type = "button";
@@ -634,6 +681,33 @@
             }
           });
           actions.append(indexButton);
+        }
+        if (extractionSupported && file.sizeBytes <= maxIndexFileBytes) {
+          const extractButton = document.createElement("button");
+          extractButton.type = "button";
+          extractButton.className = "row-action";
+          extractButton.textContent = "Extract invoice data";
+          extractButton.disabled = Boolean(activeJob);
+          extractButton.addEventListener("click", async () => {
+            extractButton.disabled = true;
+            extractButton.textContent = "Extracting…";
+            try {
+              const result = await responseJson(await apiFetch("/api/documents/extract-invoice", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: file.key })
+              }));
+              actions.querySelector(".invoice-result")?.remove();
+              actions.append(renderInvoiceResult(result));
+            } catch (error) {
+              storageMessage.textContent = error.message;
+              storageMessage.classList.add("error");
+            } finally {
+              extractButton.disabled = Boolean(activeJob);
+              extractButton.textContent = "Extract invoice data";
+            }
+          });
+          actions.append(extractButton);
         }
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
