@@ -53,6 +53,11 @@ public class InfomaniakAiModels {
     return new InfomaniakReranker(RestClient.builder(), properties);
   }
 
+  @Bean
+  RestClient.Builder infomaniakRestClientBuilder() {
+    return RestClient.builder();
+  }
+
   static OpenAiEmbeddingOptions embeddingOptions(InfomaniakAiProperties properties) {
     return OpenAiEmbeddingOptions.builder()
         .model(properties.embeddingModel())

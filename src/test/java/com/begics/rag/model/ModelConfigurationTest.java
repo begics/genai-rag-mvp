@@ -8,7 +8,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-      .withUserConfiguration(DeterministicModels.class, InfomaniakAiModels.class);
+      .withUserConfiguration(
+          DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class);
 
   @Test
   void usesOfflineModelsByDefault() {
@@ -38,6 +39,7 @@ class ModelConfigurationTest {
           assertThat(context).hasSingleBean(EmbeddingModel.class);
           assertThat(context).hasSingleBean(ChatModel.class);
           assertThat(context).hasSingleBean(Reranker.class);
+          assertThat(context).hasSingleBean(InfomaniakSpeechTranscription.class);
           InfomaniakAiModels.InfomaniakAiProperties properties =
               context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);
           var chatOptions = InfomaniakAiModels.chatOptions(properties);
