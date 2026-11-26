@@ -68,6 +68,7 @@ h1 span { color: var(--blue); }
 .flow p { margin: 9px 0 0; color: #68778a; font-size: .66rem; line-height: 1.55; }
 .pipeline-note { margin: 18px 0 0; padding: 11px 12px; border: 1px solid #e4eaff; border-radius: 9px; color: #64748b; background: #f7f8ff; font-size: .68rem; line-height: 1.55; }
 .pipeline-note strong { color: #354359; }
+.pipeline-note + .pipeline-note { margin-top: 8px; }
 .components { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #edf0f5; }
 .components span { padding: 6px 8px; border: 1px solid #e7ebf2; border-radius: 7px; color: #58677b; background: #f8f9fc; font-size: .65rem; }
 .components b { color: #354359; }

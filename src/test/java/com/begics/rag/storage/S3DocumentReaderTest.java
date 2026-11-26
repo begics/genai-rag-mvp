@@ -25,6 +25,8 @@ import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 class S3DocumentReaderTest {
@@ -74,6 +76,28 @@ class S3DocumentReaderTest {
     when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(content));
 
     assertThat(reader.read("limit.txt")).hasSize(content.length);
+  }
+
+  @Test
+  void rejectsOversizedObjectsBeforeCreatingAnIndexingJob() {
+    when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(
+        HeadObjectResponse.builder().contentLength(20L * 1024 * 1024 + 1).build());
+
+    assertThatThrownBy(() -> reader.validateIndexableSize("large.txt"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("only files up to 20 MiB can be indexed")
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+  }
+
+  @Test
+  void acceptsObjectsAtTheIndexingLimitBeforeCreatingAnIndexingJob() {
+    when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(
+        HeadObjectResponse.builder().contentLength(20L * 1024 * 1024).build());
+
+    reader.validateIndexableSize("limit.txt");
+
+    verify(s3).headObject(HeadObjectRequest.builder().bucket("rag-documents").key("limit.txt").build());
   }
 
   @Test

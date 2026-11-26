@@ -27,7 +27,7 @@ function showAnswer(question) {
   const normalized = question.toLowerCase();
   const example = examples.find(item => item.matches.some(match => normalized.includes(match)));
   if (!example) {
-    answerText.textContent = "The sample documents do not contain a prepared answer to that question. In a live RAG system, this is where retrieval checks whether the indexed sources provide enough evidence.";
+    answerText.textContent = "The sample documents do not contain a prepared answer to that question. In the current live app, an answer is withheld when reranking returns no passages; returned passages can still be irrelevant, so check the source excerpts.";
     sourceList.replaceChildren();
     const item = document.createElement("li");
     item.textContent = "No supporting sample passage found";

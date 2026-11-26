@@ -3,6 +3,7 @@ package com.begics.rag.service;
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.store.IndexingJobStore;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
+import com.begics.rag.storage.S3DocumentReader;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -12,10 +13,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class IndexingJobService {
   private final IndexingJobStore jobs;
   private final IndexingJobWorker worker;
+  private final S3DocumentReader documents;
 
-  public IndexingJobService(IndexingJobStore jobs, IndexingJobWorker worker) {
+  public IndexingJobService(IndexingJobStore jobs, IndexingJobWorker worker, S3DocumentReader documents) {
     this.jobs = jobs;
     this.worker = worker;
+    this.documents = documents;
   }
 
   public ApiModels.IndexingJobResponse enqueueText(ApiModels.IngestRequest request, UUID workspaceId) {
@@ -24,6 +27,7 @@ public class IndexingJobService {
 
   public ApiModels.IndexingJobResponse enqueueS3(ApiModels.S3IngestRequest request, UUID workspaceId) {
     WorkspaceAccessService.requireObjectKey(request.key(), workspaceId);
+    documents.validateIndexableSize(request.key());
     return enqueue(jobs.create(workspaceId, request.key(), request.key(), null));
   }
 

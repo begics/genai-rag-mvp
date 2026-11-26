@@ -82,7 +82,7 @@ public class IndexingJobStore {
   public void recoverProcessingJobs() {
     jdbc.update("""
         update indexing_jobs
-           set status = 'FAILED', stage = 'FAILED',
+           set status = 'FAILED',
                error_message = 'Application restarted during Whisper transcription. Re-index the file to retry.',
                object_key = null, content = null, updated_at = now()
          where status = 'PROCESSING' and stage = 'TRANSCRIBING'
@@ -125,7 +125,7 @@ public class IndexingJobStore {
   public void fail(UUID id, String message) {
     jdbc.update("""
         update indexing_jobs
-           set status = 'FAILED', stage = 'FAILED', error_message = ?,
+           set status = 'FAILED', error_message = ?,
                object_key = null, content = null, updated_at = now()
          where id = ?
         """, safeMessage(message), id);

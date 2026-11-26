@@ -302,6 +302,7 @@ class JdbcDocumentStoreIntegrationTest {
     assertThat(jobs.get(created.id()).orElseThrow().status()).isEqualTo("QUEUED");
     var failedTranscription = jobs.get(transcription.id()).orElseThrow();
     assertThat(failedTranscription.status()).isEqualTo("FAILED");
+    assertThat(failedTranscription.stage()).isEqualTo(IndexingJobStore.Stage.TRANSCRIBING);
     assertThat(failedTranscription.errorMessage()).contains("Re-index the file to retry");
     assertThat(failedTranscription.objectKey()).isNull();
     assertThat(jobs.markProcessing(created.id())).isTrue();
@@ -313,6 +314,15 @@ class JdbcDocumentStoreIntegrationTest {
     jobs.complete(reembed.id(), 39);
     assertThat(jobs.get(reembed.id()).orElseThrow().status()).isEqualTo("COMPLETED");
     assertThat(jobs.get(reembed.id()).orElseThrow().chunks()).isEqualTo(39);
+
+    IndexingJobStore.IndexingJob failed = jobs.create(
+        JdbcDocumentStore.LEGACY_WORKSPACE_ID, "failed-source.txt", null, "content");
+    assertThat(jobs.markProcessing(failed.id())).isTrue();
+    jobs.updateStage(failed.id(), IndexingJobStore.Stage.CHUNKING);
+    jobs.fail(failed.id(), "test failure");
+    var failedJob = jobs.get(failed.id()).orElseThrow();
+    assertThat(failedJob.status()).isEqualTo("FAILED");
+    assertThat(failedJob.stage()).isEqualTo(IndexingJobStore.Stage.CHUNKING);
   }
 
   @Test

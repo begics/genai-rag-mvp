@@ -17,7 +17,11 @@ public final class ApiModels {
   public record UploadResponse(String key, String filename, String contentType, long sizeBytes,
                                boolean indexable) {}
   public record QueryRequest(@NotBlank @Size(max = 10_000) String question) {}
-  public record SourceReference(String documentId, String source, int chunk) {}
+  public record SourceReference(String documentId, String source, int chunk, String excerpt) {
+    public SourceReference(String documentId, String source, int chunk) {
+      this(documentId, source, chunk, "");
+    }
+  }
   public record QueryResponse(String answer, List<SourceReference> sources) {}
   public record WorkspaceRequest(@NotBlank @Size(max = 120) String name) {}
   public record IndexedDocumentResponse(String id, String source, int chunks) {}

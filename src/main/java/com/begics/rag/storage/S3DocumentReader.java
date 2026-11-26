@@ -18,11 +18,13 @@ import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Component
 public class S3DocumentReader {
-  private static final int MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+  public static final int MAX_INDEX_DOCUMENT_BYTES = 20 * 1024 * 1024;
   private static final byte[] PDF_SIGNATURE = "%PDF-".getBytes(StandardCharsets.US_ASCII);
 
   private final S3Client s3;
@@ -42,14 +44,19 @@ public class S3DocumentReader {
         .bucket(bucket)
         .key(key)
         .build())) {
-      content = object.readNBytes(MAX_DOCUMENT_BYTES + 1);
-      if (content.length > MAX_DOCUMENT_BYTES) {
-        throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "S3 document exceeds 20 MiB");
+      content = object.readNBytes(MAX_INDEX_DOCUMENT_BYTES + 1);
+      if (content.length > MAX_INDEX_DOCUMENT_BYTES) {
+        throw tooLargeToIndex();
       }
     } catch (NoSuchKeyException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "S3 object not found", e);
     } catch (IOException e) {
       throw new IllegalStateException("Failed to read S3 object", e);
+    } catch (S3Exception e) {
+      if (e.statusCode() == 404) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "S3 object not found", e);
+      }
+      throw e;
     }
     if (TranscriptionFormats.supports(key)) {
       if (!transcription.available()) {
@@ -70,6 +77,27 @@ public class S3DocumentReader {
     } catch (CharacterCodingException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "S3 object must be UTF-8 text or a readable PDF", e);
     }
+  }
+
+  public void validateIndexableSize(String key) {
+    try {
+      long size = s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build()).contentLength();
+      if (size > MAX_INDEX_DOCUMENT_BYTES) {
+        throw tooLargeToIndex();
+      }
+    } catch (NoSuchKeyException exception) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "S3 object not found", exception);
+    } catch (S3Exception exception) {
+      if (exception.statusCode() == 404) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "S3 object not found", exception);
+      }
+      throw exception;
+    }
+  }
+
+  private static ResponseStatusException tooLargeToIndex() {
+    return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+        "Files up to 100 MiB can be stored, but only files up to 20 MiB can be indexed.");
   }
 
   public static boolean isTranscribable(String filename) {

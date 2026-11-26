@@ -85,9 +85,15 @@ public class RagService {
     }
     String context = matches.stream().map(RetrievedChunk::content).reduce("", (a, b) -> a + b + "\n");
     List<ApiModels.SourceReference> sources = matches.stream()
-        .map(match -> new ApiModels.SourceReference(match.documentId(), match.source(), match.chunk()))
+        .map(match -> new ApiModels.SourceReference(
+            match.documentId(), displayFilename(match.source()), match.chunk(), match.content()))
         .toList();
     return new ApiModels.QueryResponse(chat.answer(request.question(), context), sources);
+  }
+
+  private static String displayFilename(String source) {
+    int separator = source.lastIndexOf('/');
+    return separator >= 0 ? source.substring(separator + 1) : source;
   }
 
   public ApiModels.QueryResponse query(ApiModels.QueryRequest request) {

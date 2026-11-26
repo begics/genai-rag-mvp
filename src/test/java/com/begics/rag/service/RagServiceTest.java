@@ -125,11 +125,13 @@ class RagServiceTest {
 
   @Test
   void queriesRetrievedContentAndReferences() {
+    String objectKey = "uploads/workspace-id/private-id/source.txt";
     when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class))).thenReturn(List.of(
-        new RetrievedChunk("doc-1", "source.txt", 3, "retrieved text", 0.9)));
+        new RetrievedChunk("doc-1", objectKey, 3, "retrieved text", 0.9)));
     ApiModels.QueryResponse response = service.query(new ApiModels.QueryRequest("question"));
     assertThat(response.answer()).isEqualTo("answer");
-    assertThat(response.sources()).containsExactly(new ApiModels.SourceReference("doc-1", "source.txt", 3));
+    assertThat(response.sources()).containsExactly(
+        new ApiModels.SourceReference("doc-1", "source.txt", 3, "retrieved text"));
     verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID),
         eq("question"), any(), eq("test-model-v1"), eq(20));
   }
@@ -157,7 +159,7 @@ class RagServiceTest {
     assertThat(reranked).containsExactly(lessRelevant, moreRelevant);
     assertThat(suppliedContext).containsExactly("more relevant\n");
     assertThat(response.sources())
-        .containsExactly(new ApiModels.SourceReference("doc-2", "other.txt", 1));
+        .containsExactly(new ApiModels.SourceReference("doc-2", "other.txt", 1, "more relevant"));
   }
 
   @Test

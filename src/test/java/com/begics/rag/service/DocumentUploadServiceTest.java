@@ -78,6 +78,17 @@ class DocumentUploadServiceTest {
   }
 
   @Test
+  void rejectsVideoFormatsWithoutAConfiguredTranscriptionFlow() {
+    MockMultipartFile file = new MockMultipartFile("file", "clip.mov", "video/quicktime",
+        new byte[] {0, 0, 0, 0, 'f', 't', 'y', 'p', 'q', 't', ' ', ' '});
+
+    assertThatThrownBy(() -> service.upload(file))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Supported file types");
+    verifyNoInteractions(objectWriter);
+  }
+
+  @Test
   void sanitizesUploadedFilenameAndKeepsItWithinAnOpaqueUniqueKey() {
     MockMultipartFile file = new MockMultipartFile("file", "../../private notes.pdf", "application/pdf",
         "%PDF-1.7 content".getBytes(StandardCharsets.UTF_8));

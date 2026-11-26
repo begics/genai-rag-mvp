@@ -29,8 +29,6 @@ public class DocumentUploadService {
       Map.entry("csv", new FileType("text/csv", true)),
       Map.entry("pdf", new FileType("application/pdf", true)),
       Map.entry("mp4", new FileType("video/mp4", false, true)),
-      Map.entry("mov", new FileType("video/quicktime", false)),
-      Map.entry("m4v", new FileType("video/x-m4v", false)),
       Map.entry("webm", new FileType("video/webm", false, true)),
       Map.entry("mp3", new FileType("audio/mpeg", false, true)),
       Map.entry("opus", new FileType("audio/ogg", false, true)),

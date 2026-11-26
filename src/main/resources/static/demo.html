@@ -111,19 +111,20 @@
           <li><b>Retrieve candidates</b><small>Hybrid search · pgvector + full text</small><p>Combines meaning-based search with exact word matching. This helps find both paraphrases and important names or terms.</p></li>
           <li><b>Rerank for relevance</b><small>BAAI/bge-reranker-v2-m3</small><p>Scores candidate passages against the full question and moves the strongest evidence to the top.</p></li>
           <li><b>Build focused context</b><small>Best-matching passages</small><p>Selects a small set of relevant evidence for the model. Focus reduces distraction and keeps the prompt within its limits.</p></li>
-          <li><b>Generate from evidence</b><small>Infomaniak AI · chat LLM</small><p>Uses the question and retrieved context to draft a useful response. If retrieval finds no evidence, the system can abstain instead of guessing.</p></li>
+          <li><b>Generate from evidence</b><small>Infomaniak AI · chat LLM</small><p>Uses the question and retrieved context to draft a response. The current app abstains when retrieval returns no passages; if irrelevant passages are returned, it may still generate an answer.</p></li>
           <li><b>Return answer &amp; sources</b><small>Passages → browser</small><p>Includes document and passage references so a person can check where the answer came from.</p></li>
         </ol>
       </div>
       <p class="pipeline-note"><strong>What this demo does:</strong> this page uses fictional sample documents and prepared answers; it does not run these live AI or retrieval steps. The pipeline above explains the live application's architecture.</p>
+      <p class="pipeline-note"><strong>Example configuration:</strong> model names below illustrate one setup. The private app displays its actual provider and model settings at runtime; retrieved sources are evidence to inspect, not proof that every answer is supported.</p>
       <div class="components" aria-label="Technologies in this application">
         <span><b>Application</b> Spring Boot</span>
         <span><b>Identity</b> Keycloak · OIDC</span>
         <span><b>Object storage</b> RustFS · S3</span>
         <span><b>Database</b> PostgreSQL · pgvector</span>
-        <span><b>Embeddings</b> bge_multilingual_gemma2 · 3,584 dimensions</span>
-        <span><b>Reranker</b> BAAI/bge-reranker-v2-m3</span>
-        <span><b>Chat</b> Infomaniak AI · OpenAI-compatible API</span>
+        <span><b>Example embeddings</b> bge_multilingual_gemma2 · 3,584 dimensions</span>
+        <span><b>Example reranker</b> BAAI/bge-reranker-v2-m3</span>
+        <span><b>Example chat</b> Infomaniak AI · OpenAI-compatible API</span>
       </div>
       </section>
     </details>
