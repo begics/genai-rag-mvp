@@ -33,6 +33,7 @@ jobs:
           S3_SECRET_KEY=ci-storage-password
           S3_REGION=us-east-1
           S3_BUCKET=rag-documents
+          CLOUDFLARED_TUNNEL_TOKEN=ci-placeholder-token
           RAG_PROVIDER=offline
           RAG_EMBEDDING_DIMENSIONS=1536
           EOF
