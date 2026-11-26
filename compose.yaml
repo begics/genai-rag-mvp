@@ -1,33 +1,4 @@
 services:
-  traefik:
-    image: traefik:v3.5.3
-    profiles: ["traefik"]
-    restart: unless-stopped
-    command:
-      - "--providers.file.filename=/etc/traefik/dynamic.yml"
-      - "--providers.file.watch=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--log.level=INFO"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "./deploy/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
-      - "traefik-acme:/letsencrypt"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /tmp
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     restart: unless-stopped
@@ -201,4 +172,3 @@ volumes:
   rag-data:
   rustfs-data:
   portainer-data:
-  traefik-acme:

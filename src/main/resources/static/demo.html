@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="An interactive, privacy-safe walkthrough of a document AI assistant.">
+  <meta name="description" content="Learn how retrieval-augmented generation, search, guardrails, tools, and MCP fit together.">
   <title>AI Knowledge Assistant · Demo</title>
   <link rel="stylesheet" href="/demo.css">
 </head>
@@ -24,9 +24,122 @@
       <p class="eyebrow">Retrieval-augmented generation</p>
       <h1>Answers grounded in<br><span>your knowledge.</span></h1>
       <p class="hero-copy">Try a short example, inspect the evidence, and see how a document assistant can support decisions with source-backed answers.</p>
-      <a class="button button-primary" href="#try-it">Try the sample <span aria-hidden="true">↓</span></a>
-      <a class="button button-outline hero-secondary" href="https://ai-rag.begic.ch/">Open the private app</a>
-      <p class="privacy-copy">Interactive prototype · fictional documents · prepared answers only. No live AI or private data is used.</p>
+      <a class="button button-primary" href="#learn">Start learning <span aria-hidden="true">↓</span></a>
+      <a class="button button-outline hero-secondary" href="#try-it">Try the sample</a>
+      <p class="privacy-copy">A short guide to how RAG and reliable AI applications fit together. The question demo uses prepared examples only.</p>
+    </section>
+
+    <section class="learning-section panel" id="learn" aria-labelledby="learning-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Learn the connections</p>
+          <h2 id="learning-title">From a question to a trustworthy result</h2>
+        </div>
+        <span class="mode-badge">Short learning guide</span>
+      </div>
+      <p class="learning-intro">An AI application is more than a model. It prepares knowledge, finds relevant evidence, asks the model for a bounded task, and checks what can be checked. Each layer addresses a different failure.</p>
+      <ol class="learning-flow" aria-label="RAG lifecycle">
+        <li><strong>Prepare once</strong><span>Files → extracted text → passages → indexes</span></li>
+        <li><strong>Ask each time</strong><span>Question → search → evidence → answer</span></li>
+        <li><strong>Check always</strong><span>Access → validation → evaluation → oversight</span></li>
+      </ol>
+      <div class="learning-topics">
+        <details class="learning-topic">
+          <summary>Why RAG? Motivation and the basic idea</summary>
+          <div class="learning-copy">
+            <p>A language model generates plausible text from what it learned during training and the prompt it receives. It may not know your private documents, recent changes, or the exact policy you need. RAG—retrieval-augmented generation—searches an approved knowledge collection first, then gives selected passages to the model as evidence for this answer.</p>
+            <p><strong>Connection:</strong> retrieval supplies information; generation explains it. RAG does not retrain the model, guarantee truth, or make a weak source authoritative. You still need source ownership, freshness, and a way to verify claims.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Why index documents before asking questions?</summary>
+          <div class="learning-copy">
+            <p>Indexing is preparation done once per document: keep the original, extract text, split it into passages, attach source and access metadata, and build search structures. For semantic search, an embedding model turns each passage into a vector. A lexical index separately supports exact words and identifiers.</p>
+            <p><strong>Why passages?</strong> Sending whole collections is slow, costly, and can exceed the model's context limit. Focused passages make retrieval precise and let the answer point back to evidence. Chunk size, overlap, extraction quality, and metadata all affect what can later be found.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Semantic search, lexical search, and hybrid retrieval</summary>
+          <div class="learning-copy">
+            <p>Semantic search compares vectors so “car” may find a passage about “automobile” even without an exact word match. Lexical search is often better for exact names, error codes, dates, and quoted phrases. Hybrid retrieval combines both signals; a reranker can then reorder the candidates against the full question.</p>
+            <p><strong>Important limit:</strong> a reranker cannot recover evidence that the first search missed. Embeddings for stored passages and questions must use compatible models and dimensions. Measure retrieval quality on representative questions instead of assuming semantic similarity means relevance.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>What “reasoning” can we inspect?</summary>
+          <div class="learning-copy">
+            <p>Do not treat a model's fluent explanation or hidden chain-of-thought as a reliable audit log. A safer learning trace shows observable steps: the question, which sources were retrieved, what context was supplied, which tools ran, what structured result was returned, and which validations passed or failed.</p>
+            <p><strong>For a RAG answer:</strong> inspect the cited passage and ask whether it actually supports each important claim. A citation is a lead to evidence, not proof that the answer is correct.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Why guardrails? Security and reliability belong in layers</summary>
+          <div class="learning-copy">
+            <p>Prompts guide a model; they are not an access-control system. Authenticate users and filter documents before restricted content reaches retrieval or the model. Validate file types, input size, workspace ownership, output schemas, tool permissions, and resource limits in application code.</p>
+            <p><strong>Why layers?</strong> Documents and tool results are untrusted data and may contain misleading instructions. Least-privilege tools, explicit approval for consequential actions, timeouts, rate limits, audit records, and tests reduce different risks. No single “guardrail prompt” covers them all.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Why JSON and schemas?</summary>
+          <div class="learning-copy">
+            <p>JSON gives software a predictable structure: named fields, numbers, arrays, and explicit missing values. A schema lets the application reject malformed output, enforce required fields, and pass valid data to the next step without guessing how to parse prose.</p>
+            <p><strong>But:</strong> valid JSON proves only that the shape is valid—not that a value is true. Check values against source evidence and business rules; represent uncertainty and missing information explicitly rather than filling gaps with guesses.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Extraction models: typed values, not RAG answers</summary>
+          <div class="learning-copy">
+            <p>An extraction model returns named, typed values that an application can use. Depending on the model, a task can extract a value stated in the input, compute a value from supplied facts, estimate an unknown outcome, or forecast a sequence over time. For example, an invoice workflow could extract a due date, calculate days overdue from a supplied current date, or estimate when payment may arrive.</p>
+            <p><strong>How it differs from RAG:</strong> RAG finds relevant passages and generates an answer grounded in them; extraction targets specific fields for application logic. A typed result, constraint, confidence score, or source span helps validation and review, but none guarantees correctness. Handle missing values explicitly and require stronger checks or human review when mistakes have consequences. Capabilities and uncertainty signals vary by model.</p>
+            <p><a href="https://developers.cloudflare.com/workers-ai/concepts/extraction-models/" target="_blank" rel="noopener noreferrer">Cloudflare Workers AI extraction models</a> are one example of this pattern, not a feature currently used by this RAG app.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Tools, agents, and MCP are related—but not the same</summary>
+          <div class="learning-copy">
+            <p>A tool is a specific operation an application allows a model or workflow to request, such as searching an approved index or creating a draft. The application validates arguments, checks permissions, executes the operation, and returns a bounded result. An agent is a control loop that may choose among tools and continue from their observations.</p>
+            <p><strong>MCP</strong> (Model Context Protocol) is a standard way for AI applications to discover and call tools or access resources provided by MCP servers. It is a connection protocol, not an agent, a security boundary, or a guarantee that a tool is safe. The host still needs authorization, allowlists, validation, and human approval where appropriate.</p>
+          </div>
+        </details>
+        <details class="learning-topic">
+          <summary>Common challenges and how to evaluate them</summary>
+          <div class="learning-copy">
+            <ul>
+              <li><strong>Bad source or stale version:</strong> govern ownership, dates, and replacement.</li>
+              <li><strong>Extraction or chunking loss:</strong> inspect parsed text and test boundary cases.</li>
+              <li><strong>Missed or irrelevant retrieval:</strong> measure recall and relevance separately.</li>
+              <li><strong>Unsupported answer:</strong> verify citations and test abstention on unanswerable questions.</li>
+              <li><strong>Access leak or unsafe action:</strong> test identity filters and tool permissions independently of prompts.</li>
+              <li><strong>Slow or costly pipeline:</strong> measure latency and provider usage at each stage.</li>
+            </ul>
+            <p>Evaluation should locate the failing stage. Improving the prompt will not fix a missing source, and adding a larger model will not repair an incorrect permission filter.</p>
+          </div>
+        </details>
+      </div>
+      <details class="learning-sources">
+        <summary>Continue with your course notes and LinkedIn reading list</summary>
+        <div class="learning-copy">
+          <p><strong>Course study companions</strong> (your HSLU course repository; access may require sign-in):</p>
+          <ul>
+            <li><a href="https://github.com/begics/hslu-cas-llm-ai/blob/main/wiki/learning-roadmap.md">Learning roadmap</a> · topics and practical sequence</li>
+            <li><a href="https://github.com/begics/hslu-cas-llm-ai/blob/main/wiki/m2-rag-study-guide.md">M2 RAG study guide</a> · retrieval, evaluation, agents, and trust</li>
+            <li><a href="https://github.com/begics/hslu-cas-llm-ai/blob/main/wiki/guided-study-workbook.md">Guided study workbook</a> · exercises and self-checks</li>
+            <li><a href="https://github.com/begics/hslu-cas-llm-ai/blob/main/wiki/illustrated-examples.md">Illustrated examples</a> · visual explanations and exercises</li>
+            <li><a href="https://developers.cloudflare.com/workers-ai/concepts/extraction-models/" target="_blank" rel="noopener noreferrer">Cloudflare Workers AI extraction models</a> · typed extraction, computation, estimation, and forecasting</li>
+          </ul>
+          <p><strong>LinkedIn reading pointers</strong> from your notes (LinkedIn may require sign-in):</p>
+          <ul>
+            <li><a href="https://lnkd.in/p/ecCUenHJ">Production RAG building blocks</a></li>
+            <li><a href="https://lnkd.in/p/eJxw3ZTN">Asynchronous document processing</a></li>
+            <li><a href="https://lnkd.in/p/eNHHgH24">Agent workflow and design patterns</a></li>
+            <li><a href="https://lnkd.in/p/eug-zbYa">Modular RAG application structure</a></li>
+            <li><a href="https://lnkd.in/dBtDVZbK">LLM fundamentals</a> · <a href="https://lnkd.in/dRyEhRD6">first agent and ReAct</a></li>
+            <li><a href="https://lnkd.in/dQYzFskd">Orchestration</a> · <a href="https://lnkd.in/dc4WNi9y">RAG and context engineering</a> · <a href="https://lnkd.in/djaaZ-hr">MCP</a></li>
+          </ul>
+          <p class="source-caveat">These links are further reading, not verified evidence for every claim above. Course notes are learning companions, not a substitute for official materials; some course assets are adapted from third-party sources.</p>
+        </div>
+      </details>
+      <p class="implementation-note"><strong>What this demo implements:</strong> this public page uses fictional samples and prepared answers only. The private app has authenticated workspaces, queued indexing, hybrid search, and source excerpts. Tool execution, MCP, and Cloudflare Workers AI extraction models are concepts explained here, not features currently exposed by this app.</p>
     </section>
 
     <section class="demo-grid" id="try-it">

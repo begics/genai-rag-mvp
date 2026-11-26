@@ -98,6 +98,13 @@
     .thinking span:nth-child(3) { animation-delay: .3s; }
     @keyframes pulse { 50% { opacity: .35; transform: translateY(-3px); } }
     .composer-wrap { padding: 14px clamp(16px, 3.5vw, 38px) 18px; border-top: 1px solid var(--line); background: #fcfdff; }
+    .retrieval-filters { display: flex; gap: 8px; margin: 0 2px 9px; }
+    .retrieval-filters input, .retrieval-filters select { min-width: 0; padding: 7px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; background: #fff; font-size: .75rem; }
+    .retrieval-filters input { flex: 1; }
+    .feedback-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+    .feedback-button { padding: 5px 8px; border: 1px solid #dfe5ef; border-radius: 7px; color: #526174; background: #fff; font-size: .72rem; }
+    .feedback-button.selected { border-color: #9bb0ff; color: var(--blue-dark); background: #eff3ff; }
+    .feedback-comment { width: min(420px, 100%); padding: 7px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; font-size: .75rem; }
     .ask { display: flex; align-items: flex-end; gap: 10px; padding: 8px 8px 8px 15px; border: 1px solid #dfe5ef; border-radius: 13px; background: #fff; box-shadow: 0 3px 12px #253c5c08; }
     .ask:focus-within { border-color: #9bb0ff; box-shadow: 0 0 0 3px #eaf0ff; }
     .ask textarea { flex: 1; min-width: 0; max-height: 150px; resize: vertical; border: 0; outline: 0; padding: 7px 0; color: var(--ink); background: transparent; line-height: 1.5; }
@@ -366,6 +373,17 @@
           </div>
         </div>
         <div class="composer-wrap">
+          <div class="retrieval-filters" aria-label="Retrieval filters">
+            <input id="source-filter" type="text" maxlength="500" placeholder="Filter by source name">
+            <select id="document-type-filter" aria-label="Document type">
+              <option value="">Any type</option>
+              <option value="text">Text</option>
+              <option value="markdown">Markdown</option>
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+              <option value="media">Audio/video</option>
+            </select>
+          </div>
           <form class="ask" id="ask-form">
             <textarea id="question" name="question" rows="2" maxlength="10000" placeholder="Ask a standalone question about your files..." aria-label="Your question" required></textarea>
             <button class="send-button" id="ask-button" type="submit" aria-label="Send message" title="Send message">
@@ -396,7 +414,7 @@
                  accept=".txt,.md,.csv,.pdf,.mp4,.webm,.mp3,.wav,.m4a,.aac,.ogg,.opus,.wma,.flac"
                  aria-label="Choose files to upload">
           <button class="upload-button" id="upload-button" type="button" disabled>Choose files to upload</button>
-          <p class="upload-limit">Files up to 100 MiB can be stored; indexing is limited to 20 MiB per file, including audio/video. Supported formats: text, Markdown, CSV, text-based PDF, and supported Whisper media. Storage and indexed data each have a 1 GB limit.</p>
+          <p class="upload-limit">Each file can be up to 20 MiB. Supported formats: text, Markdown, CSV, text-based PDF, and supported Whisper media. Storage and indexed data each have a 1 GB limit.</p>
         </div>
         <section class="storage-usage" aria-label="Storage usage">
           <div class="storage-meter">
@@ -504,7 +522,7 @@
       return payload;
     }
 
-    function addMessage(text, kind, sources) {
+    function addMessage(text, kind, sources, question) {
       document.getElementById("empty-state")?.remove();
       const message = document.createElement("article");
       message.className = `message ${kind}`;
@@ -532,6 +550,49 @@
           list.append(item);
         }
         body.append(list);
+      }
+      if (kind === "assistant") {
+        const controls = document.createElement("div");
+        controls.className = "feedback-controls";
+        const helpful = document.createElement("button");
+        helpful.type = "button";
+        helpful.className = "feedback-button";
+        helpful.textContent = "Helpful";
+        const unhelpful = document.createElement("button");
+        unhelpful.type = "button";
+        unhelpful.className = "feedback-button";
+        unhelpful.textContent = "Not helpful";
+        const comment = document.createElement("input");
+        comment.className = "feedback-comment";
+        comment.maxLength = 2000;
+        comment.placeholder = "Optional feedback";
+        controls.append(helpful, unhelpful, comment);
+        message.append(controls);
+        for (const [button, isHelpful] of [[helpful, true], [unhelpful, false]]) {
+          button.addEventListener("click", async () => {
+            button.disabled = true;
+            try {
+              await responseJson(await apiFetch("/api/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  question: question || "",
+                  answer: text,
+                  helpful: isHelpful,
+                  comment: comment.value.trim() || null,
+                  sourceIds: (sources || []).map(source => source.documentId)
+                })
+              }));
+              helpful.classList.toggle("selected", isHelpful);
+              unhelpful.classList.toggle("selected", !isHelpful);
+              comment.disabled = true;
+            } catch (error) {
+              button.disabled = false;
+              chatStatus.textContent = error.message;
+              chatStatus.classList.add("error");
+            }
+          });
+        }
       }
       chatLog.append(message);
       message.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -760,7 +821,7 @@
         status.textContent = `Stored in private storage · ${(uploaded.sizeBytes / 1024 / 1024).toFixed(2)} MiB`;
         await loadStorage();
         if (uploaded.indexable && uploaded.sizeBytes > maxIndexFileBytes) {
-          status.textContent += " · Stored only; files over 20 MiB cannot be indexed.";
+          status.textContent += " · Files over 20 MiB cannot be indexed.";
         } else if (!uploaded.indexable) {
           status.textContent += isTranscribableName(uploaded.filename)
             ? " · Transcription requires RAG_PROVIDER=infomaniak."
@@ -1082,13 +1143,19 @@
       chatStatus.textContent = "Searching your knowledge...";
       const thinking = addThinkingIndicator();
       try {
+        const sourceFilter = document.getElementById("source-filter").value.trim();
+        const documentTypeFilter = document.getElementById("document-type-filter").value;
         const result = await responseJson(await apiFetch("/api/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question })
+          body: JSON.stringify({
+            question,
+            source: sourceFilter || null,
+            documentType: documentTypeFilter || null
+          })
         }));
         thinking.remove();
-        addMessage(result.answer, "assistant", result.sources);
+        addMessage(result.answer, "assistant", result.sources, question);
         chatStatus.textContent = "";
       } catch (error) {
         thinking.remove();

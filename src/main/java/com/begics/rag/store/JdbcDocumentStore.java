@@ -36,9 +36,10 @@ public class JdbcDocumentStore implements DocumentStore {
     String id = existingId != null ? existingId
         : documentId == null ? UUID.randomUUID().toString() : documentId.toString();
     jdbc.update("""
-        insert into documents(id, source, workspace_id) values (?::uuid, ?, ?)
-        on conflict (id) do update set source = excluded.source, workspace_id = excluded.workspace_id
-        """, id, source, workspaceId);
+        insert into documents(id, source, workspace_id, document_type) values (?::uuid, ?, ?, ?)
+        on conflict (id) do update set source = excluded.source, workspace_id = excluded.workspace_id,
+                                        document_type = excluded.document_type
+        """, id, source, workspaceId, documentType(source));
     jdbc.update("delete from chunks where document_id = ?::uuid", id);
     for (int i = 0; i < chunks.size(); i++) {
       jdbc.update("""
@@ -105,21 +106,56 @@ public class JdbcDocumentStore implements DocumentStore {
   @Override
   public List<RetrievedChunk> search(
       UUID workspaceId, String query, float[] embedding, String embeddingModel, int limit) {
+    return search(workspaceId, query, embedding, embeddingModel, limit, new DocumentFilter(null, null));
+  }
+
+  @Override
+  public List<RetrievedChunk> search(
+      UUID workspaceId, String query, float[] embedding, String embeddingModel, int limit,
+      DocumentFilter filter) {
+    String vectorFilter = "";
+    String textFilter = "";
+    java.util.ArrayList<Object> vectorArgs = new java.util.ArrayList<>();
+    vectorArgs.add(vector(embedding));
+    vectorArgs.add(embeddingModel);
+    vectorArgs.add(workspaceId);
+    java.util.ArrayList<Object> textArgs = new java.util.ArrayList<>();
+    textArgs.add(query);
+    textArgs.add(query);
+    textArgs.add(workspaceId);
+    if (filter != null && filter.documentType() != null && !filter.documentType().isBlank()) {
+      vectorFilter += " and d.document_type = ?";
+      textFilter += " and d.document_type = ?";
+      vectorArgs.add(filter.documentType().toLowerCase(java.util.Locale.ROOT));
+      textArgs.add(filter.documentType().toLowerCase(java.util.Locale.ROOT));
+    }
+    if (filter != null && filter.source() != null && !filter.source().isBlank()) {
+      vectorFilter += " and d.source = ?";
+      textFilter += " and d.source = ?";
+      vectorArgs.add(filter.source());
+      textArgs.add(filter.source());
+    }
+    vectorArgs.add(vector(embedding));
+    vectorArgs.add(limit);
+    textArgs.add(limit);
+
     List<RetrievedChunk> vectorMatches = jdbc.query("""
         select d.id::text, d.source, c.chunk_no, c.content,
                1 - (c.embedding <=> ?::halfvec) as score
           from chunks c join documents d on d.id = c.document_id
          where c.embedding is not null and c.embedding_model = ? and d.workspace_id = ?
+        """ + vectorFilter + """
          order by c.embedding <=> ?::halfvec limit ?
-        """, this::mapChunk, vector(embedding), embeddingModel, workspaceId, vector(embedding), limit);
+        """, this::mapChunk, vectorArgs.toArray());
     List<RetrievedChunk> textMatches = jdbc.query("""
         select d.id::text, d.source, c.chunk_no, c.content,
                ts_rank_cd(c.search_vector, plainto_tsquery('simple', ?)) as score
           from chunks c join documents d on d.id = c.document_id
          where c.search_vector @@ plainto_tsquery('simple', ?) and d.workspace_id = ?
+        """ + textFilter + """
          order by score desc, c.id
          limit ?
-        """, this::mapChunk, query, query, workspaceId, limit);
+        """, this::mapChunk, textArgs.toArray());
 
     Map<String, RankedChunk> fused = new LinkedHashMap<>();
     addRankedMatches(fused, vectorMatches);
@@ -175,6 +211,16 @@ public class JdbcDocumentStore implements DocumentStore {
 
   public void updateEmbedding(long chunkId, float[] embedding, String embeddingModel) {
     updateEmbedding(LEGACY_WORKSPACE_ID, chunkId, embedding, embeddingModel);
+  }
+
+  private static String documentType(String source) {
+    String lower = source == null ? "" : source.toLowerCase(java.util.Locale.ROOT);
+    if (lower.endsWith(".pdf")) return "pdf";
+    if (lower.endsWith(".csv")) return "csv";
+    if (lower.endsWith(".md")) return "markdown";
+    if (lower.endsWith(".txt")) return "text";
+    if (lower.matches(".*\\.(mp3|mp4|ogg|opus|wav|webm|wma|m4a|aac|flac)$")) return "media";
+    return "other";
   }
 
   private RetrievedChunk mapChunk(java.sql.ResultSet rs, int row) throws java.sql.SQLException {

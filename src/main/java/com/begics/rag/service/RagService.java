@@ -76,8 +76,18 @@ public class RagService {
         store.save(workspaceId, source, chunks, vectors, embeddings.modelId(), documentId), chunks.size());
   }
   public ApiModels.QueryResponse query(ApiModels.QueryRequest request, UUID workspaceId) {
-    List<RetrievedChunk> candidates = store.search(
-        workspaceId, request.question(), embeddings.embed(request.question()), embeddings.modelId(), CANDIDATE_RESULTS);
+    return query(request, workspaceId, null);
+  }
+
+  public ApiModels.QueryResponse query(
+      ApiModels.QueryRequest request, UUID workspaceId, DocumentStore.DocumentFilter filter) {
+    List<RetrievedChunk> candidates = filter == null
+        || ((filter.source() == null || filter.source().isBlank())
+            && (filter.documentType() == null || filter.documentType().isBlank()))
+        ? store.search(workspaceId, request.question(), embeddings.embed(request.question()),
+            embeddings.modelId(), CANDIDATE_RESULTS)
+        : store.search(workspaceId, request.question(), embeddings.embed(request.question()),
+            embeddings.modelId(), CANDIDATE_RESULTS, filter);
     List<RetrievedChunk> matches =
         reranker.rerank(request.question(), candidates, MAX_RESULTS);
     if (matches.isEmpty()) {

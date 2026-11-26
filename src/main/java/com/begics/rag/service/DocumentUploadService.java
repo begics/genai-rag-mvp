@@ -21,8 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DocumentUploadService {
-  private static final long MAX_FILE_BYTES = 100L * 1024 * 1024;
-  private static final long MAX_TRANSCRIPTION_FILE_BYTES = 20L * 1024 * 1024;
+  private static final long MAX_FILE_BYTES = 20L * 1024 * 1024;
   private static final Map<String, FileType> ALLOWED_TYPES = Map.ofEntries(
       Map.entry("txt", new FileType("text/plain", true)),
       Map.entry("md", new FileType("text/markdown", true)),
@@ -56,7 +55,7 @@ public class DocumentUploadService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a non-empty file to upload");
     }
     if (file.getSize() > MAX_FILE_BYTES) {
-      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Files must be 100 MiB or smaller");
+      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Files must be 20 MiB or smaller");
     }
 
     String requestedFilename = file.getOriginalFilename() == null
@@ -70,10 +69,6 @@ public class DocumentUploadService {
     if (fileType == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Supported file types are text, PDF, video, and audio files");
-    }
-    if (fileType.transcribable() && file.getSize() > MAX_TRANSCRIPTION_FILE_BYTES) {
-      throw new ResponseStatusException(
-          HttpStatus.PAYLOAD_TOO_LARGE, "Audio/video files for transcription must be 20 MiB or smaller");
     }
     validateContent(file, extension);
     storageQuota.checkS3Upload(subject, workspaceId, file.getSize());

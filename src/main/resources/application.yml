@@ -3,8 +3,8 @@ spring:
   config.import: optional:file:.env[.properties]
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 101MB
+      max-file-size: 20MB
+      max-request-size: 21MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/rag}
     username: ${DATABASE_USERNAME:rag}

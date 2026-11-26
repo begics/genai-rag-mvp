@@ -18,13 +18,25 @@ public final class ApiModels {
       UUID id, String source, String status, String stage, int chunks, String errorMessage, String jobType) {}
   public record UploadResponse(String key, String filename, String contentType, long sizeBytes,
                                boolean indexable) {}
-  public record QueryRequest(@NotBlank @Size(max = 10_000) String question) {}
+  public record QueryRequest(@NotBlank @Size(max = 10_000) String question,
+                             @Size(max = 500) String source,
+                             @Size(max = 20) String documentType) {
+    public QueryRequest(String question) {
+      this(question, null, null);
+    }
+  }
   public record SourceReference(String documentId, String source, int chunk, String excerpt) {
     public SourceReference(String documentId, String source, int chunk) {
       this(documentId, source, chunk, "");
     }
   }
   public record QueryResponse(String answer, List<SourceReference> sources) {}
+  public record AnswerFeedbackRequest(
+      @NotBlank @Size(max = 10_000) String question,
+      @NotBlank @Size(max = 50_000) String answer,
+      boolean helpful,
+      @Size(max = 2_000) String comment,
+      List<@Size(max = 500) String> sourceIds) {}
   public record InvoiceExtractionRequest(@NotBlank @Size(max = 500) String key) {}
   public record InvoiceField<T>(T value, String evidence) {}
   public record InvoiceExtractionResponse(

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
+import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,6 +38,38 @@ class DocumentUploadServiceTest {
     }
     verify(storageQuota, times(3)).checkS3Upload(eq("legacy-test-subject"),
         eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), anyLong());
+  }
+
+  @Test
+  void acceptsFilesAtTheTwentyMebibyteUploadLimit() {
+    byte[] content = new byte[20 * 1024 * 1024];
+    java.util.Arrays.fill(content, (byte) 'a');
+    MockMultipartFile file = new MockMultipartFile("file", "large.txt", "text/plain", content);
+
+    var uploaded = service.upload(file);
+
+    assertThat(uploaded.sizeBytes()).isEqualTo(20L * 1024 * 1024);
+    verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
+  }
+
+  @Test
+  void rejectsFilesOverTheTwentyMebibyteLimitForEveryFileType() {
+    byte[] content = new byte[20 * 1024 * 1024 + 1];
+    java.util.Arrays.fill(content, (byte) 'a');
+    MockMultipartFile textFile = new MockMultipartFile("file", "large.txt", "text/plain", content);
+    content[0] = 'I';
+    content[1] = 'D';
+    content[2] = '3';
+    MockMultipartFile audioFile = new MockMultipartFile("file", "large.mp3", "audio/mpeg", content);
+
+    for (MockMultipartFile file : new MockMultipartFile[] {textFile, audioFile}) {
+      assertThatThrownBy(() -> service.upload(file))
+          .isInstanceOf(ResponseStatusException.class)
+          .hasMessageContaining("Files must be 20 MiB or smaller")
+          .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+          .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+    verifyNoInteractions(objectWriter);
   }
 
   @Test

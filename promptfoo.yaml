@@ -32,4 +32,4 @@ tests:
       - type: javascript
         value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|don't know|cannot determine/i.test(output)"
       - type: javascript
-        value: "context.metadata?.sources?.every((source) => ['promptfoo-observatory.txt', 'promptfoo-calibration.txt'].includes(source.source))"
+        value: "(context.metadata?.sources?.length ?? 0) === 0"

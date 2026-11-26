@@ -85,7 +85,7 @@ class S3DocumentReaderTest {
 
     assertThatThrownBy(() -> reader.validateIndexableSize("large.txt"))
         .isInstanceOf(ResponseStatusException.class)
-        .hasMessageContaining("only files up to 20 MiB can be indexed")
+        .hasMessageContaining("Only files up to 20 MiB can be indexed")
         .extracting(error -> ((ResponseStatusException) error).getStatusCode())
         .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
   }

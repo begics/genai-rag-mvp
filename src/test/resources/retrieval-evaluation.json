@@ -32,5 +32,56 @@
         "vector": [0.0, 1.0]
       }
     ]
+  },
+  {
+    "question": "zebralight calibration procedure",
+    "expectedSource": "zebralight-manual.txt",
+    "queryVector": [1.0, 0.0],
+    "documents": [
+      {
+        "source": "zebralight-manual.txt",
+        "text": "zebralight calibration procedure: align the lens at noon",
+        "vector": [0.8, 0.6]
+      },
+      {
+        "source": "laptop-notes.txt",
+        "text": "replace the laptop battery before travelling",
+        "vector": [0.0, 1.0]
+      }
+    ]
+  },
+  {
+    "question": "determine the invoice payment deadline",
+    "expectedSource": "invoice-policy.txt",
+    "queryVector": [0.0, 1.0],
+    "documents": [
+      {
+        "source": "invoice-policy.txt",
+        "text": "all invoices are payable within thirty days",
+        "vector": [0.1, 0.9]
+      },
+      {
+        "source": "travel-policy.txt",
+        "text": "book travel at least fourteen days in advance",
+        "vector": [1.0, 0.0]
+      }
+    ]
+  },
+  {
+    "question": "replace the backup battery",
+    "expectedSource": "maintenance-guide.txt",
+    "queryVector": [0.0, 1.0],
+    "documents": [
+      {
+        "source": "maintenance-guide.txt",
+        "text": "disconnect power before replacing the backup battery",
+        "vector": [0.2, 0.8]
+      },
+      {
+        "source": "network-guide.txt",
+        "text": "configure network ports and routing tables",
+        "vector": [1.0, 0.0]
+      }
+    ]
   }
 ]

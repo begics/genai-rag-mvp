@@ -21,6 +21,7 @@ import com.begics.rag.contract.ApiModels.S3IngestRequest;
 import com.begics.rag.service.DocumentUploadService;
 import com.begics.rag.service.IndexingJobService;
 import com.begics.rag.service.InvoiceExtractionService;
+import com.begics.rag.service.AnswerFeedbackService;
 import com.begics.rag.service.PipelineInfoService;
 import com.begics.rag.service.StorageQuotaService;
 import com.begics.rag.service.RagService;
@@ -80,6 +81,9 @@ class SecurityConfigurationTest {
 
   @MockitoBean
   private InvoiceExtractionService invoiceExtractionService;
+
+  @MockitoBean
+  private AnswerFeedbackService answerFeedbackService;
 
   @MockitoBean
   private WorkspaceAccessService workspaces;
@@ -149,6 +153,14 @@ class SecurityConfigurationTest {
             org.hamcrest.Matchers.containsString("frame-ancestors 'none'")))
         .andExpect(header().string("X-Content-Type-Options", "nosniff"))
         .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"));
+  }
+
+  @Test
+  void addsRestrictivePermissionsPolicy() throws Exception {
+    mvc.perform(get("/").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Permissions-Policy",
+            "camera=(), microphone=(), geolocation=()"));
   }
 
   @Test

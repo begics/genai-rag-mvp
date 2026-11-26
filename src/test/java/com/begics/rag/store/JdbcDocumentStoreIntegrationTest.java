@@ -201,6 +201,27 @@ class JdbcDocumentStoreIntegrationTest {
   }
 
   @Test
+  void filtersRetrievalByDocumentTypeAndSource() {
+    store.save("manual.pdf", List.of("pdf calibration procedure"),
+        List.of(vector(1, 0)), "test-model", null);
+    store.save("notes.txt", List.of("text calibration procedure"),
+        List.of(vector(1, 0)), "test-model", null);
+
+    List<RetrievedChunk> pdfResults = store.search(
+        JdbcDocumentStore.LEGACY_WORKSPACE_ID, "calibration",
+        vector(1, 0), "test-model", 5,
+        new DocumentStore.DocumentFilter(null, "pdf"));
+
+    List<RetrievedChunk> sourceResults = store.search(
+        JdbcDocumentStore.LEGACY_WORKSPACE_ID, "calibration",
+        vector(1, 0), "test-model", 5,
+        new DocumentStore.DocumentFilter("manual.pdf", null));
+
+    assertThat(pdfResults).extracting(RetrievedChunk::source).containsExactly("manual.pdf");
+    assertThat(sourceResults).extracting(RetrievedChunk::source).containsExactly("manual.pdf");
+  }
+
+  @Test
   void selectsAndUpdatesChunksWithMissingEmbeddings() {
     String documentId = store.save("manual.txt", List.of("needs embedding"), List.of(vector(0, 1)), "old-model", null);
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);

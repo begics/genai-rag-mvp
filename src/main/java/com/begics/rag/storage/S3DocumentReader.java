@@ -97,7 +97,7 @@ public class S3DocumentReader {
 
   private static ResponseStatusException tooLargeToIndex() {
     return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-        "Files up to 100 MiB can be stored, but only files up to 20 MiB can be indexed.");
+        "Only files up to 20 MiB can be indexed.");
   }
 
   public static boolean isTranscribable(String filename) {

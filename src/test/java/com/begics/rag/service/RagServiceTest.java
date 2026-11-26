@@ -137,6 +137,19 @@ class RagServiceTest {
   }
 
   @Test
+  void forwardsSourceAndDocumentTypeFiltersToRetrieval() {
+    when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class),
+        org.mockito.ArgumentMatchers.any(DocumentStore.DocumentFilter.class))).thenReturn(List.of());
+    DocumentStore.DocumentFilter filter = new DocumentStore.DocumentFilter("manual.pdf", "pdf");
+
+    service.query(new ApiModels.QueryRequest("question", "manual.pdf", "pdf"),
+        WorkspaceAccessService.LEGACY_WORKSPACE_ID, filter);
+
+    verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("question"), any(),
+        eq("test-model-v1"), eq(20), eq(filter));
+  }
+
+  @Test
   void sendsRetrievedCandidatesToTheRerankerBeforeBuildingAnswerContext() {
     RetrievedChunk lessRelevant = new RetrievedChunk("doc-1", "source.txt", 0, "less relevant", 0.9);
     RetrievedChunk moreRelevant = new RetrievedChunk("doc-2", "other.txt", 1, "more relevant", 0.7);
