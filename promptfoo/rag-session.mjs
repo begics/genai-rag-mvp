@@ -201,9 +201,15 @@ export class RagSession {
       }
       if (status.status === 'COMPLETED') return status;
       if (status.status === 'FAILED') {
+        const failure = String(status.errorMessage || '');
+        const failureCode = failure.match(/\b([45]\d{2}) [A-Z_]+\b/)?.[1];
+        const failureType = failure.includes('document screening results that failed validation')
+          ? 'screening output failed validation'
+          : failureCode
+            ? `screening returned HTTP ${failureCode}`
+            : 'provider error details are omitted';
         throw new Error(
-          `Indexing failed for ${source} during ${status.stage || 'an unknown stage'}; `
-            + 'provider error details are omitted.',
+          `Indexing failed for ${source} during ${status.stage || 'an unknown stage'}; ${failureType}.`,
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 1_000));
