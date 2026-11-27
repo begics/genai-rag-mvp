@@ -1,8 +1,8 @@
 package com.begics.rag.model;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 final class InfomaniakAgentPlanner implements AgentPlanner {
   private static final String SCHEMA = """
@@ -39,7 +39,7 @@ final class InfomaniakAgentPlanner implements AgentPlanner {
           new PlanningInput(question, documents));
       String output = chat.answerWithSchema(INSTRUCTIONS, input, SCHEMA);
       return objectMapper.readValue(output, AgentPlan.class);
-    } catch (JsonProcessingException exception) {
+    } catch (JacksonException exception) {
       throw new IllegalStateException("Agent planner returned invalid structured output", exception);
     }
   }

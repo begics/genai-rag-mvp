@@ -6,10 +6,10 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import tools.jackson.databind.json.JsonMapper;
 
 class InfomaniakAgentPlannerTest {
   @Test
@@ -22,7 +22,7 @@ class InfomaniakAgentPlannerTest {
         """;
     when(chat.answerWithSchema(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
         .thenReturn(output);
-    InfomaniakAgentPlanner planner = new InfomaniakAgentPlanner(chat, new ObjectMapper());
+    InfomaniakAgentPlanner planner = new InfomaniakAgentPlanner(chat, JsonMapper.builder().build());
 
     AgentPlanner.AgentPlan plan = planner.plan("Compare employee leave policies", List.of(
         new AgentPlanner.AgentDocument("doc-1", "leave-2025.pdf", "pdf"),

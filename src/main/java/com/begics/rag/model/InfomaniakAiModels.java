@@ -2,7 +2,7 @@ package com.begics.rag.model;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;

@@ -4,14 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import org.junit.jupiter.api.Test;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
           DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class)
-      .withBean(ObjectMapper.class, ObjectMapper::new);
+      .withBean(tools.jackson.databind.ObjectMapper.class, () -> JsonMapper.builder().build());
 
   @Test
   void usesOfflineModelsByDefault() {
