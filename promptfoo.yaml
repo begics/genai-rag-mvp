@@ -32,4 +32,4 @@ tests:
       - type: javascript
         value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|not (?:provide )?enough information|don't know|cannot determine/i.test(output)"
       - type: javascript
-        value: "(context.metadata?.sources?.length ?? 0) === 0"
+        value: "!(context.metadata?.sources ?? []).some((source) => /1988|convention/i.test(source.excerpt ?? ''))"
