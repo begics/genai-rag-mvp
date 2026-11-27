@@ -201,7 +201,10 @@ export class RagSession {
       }
       if (status.status === 'COMPLETED') return status;
       if (status.status === 'FAILED') {
-        throw new Error(`Indexing failed for ${source}; provider error details are omitted.`);
+        throw new Error(
+          `Indexing failed for ${source} during ${status.stage || 'an unknown stage'}; `
+            + 'provider error details are omitted.',
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, 1_000));
     }
