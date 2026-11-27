@@ -100,6 +100,20 @@ class InfomaniakDocumentRiskScreeningTest {
   }
 
   @Test
+  void retriesTransientProviderGatewayFailuresOnce() {
+    when(chat.answerWithSchema(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.anyString()))
+        .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "temporary provider response"))
+        .thenReturn("{\"findings\":[]}");
+
+    assertThat(screening.evaluate("Document text").findings()).isEmpty();
+
+    verify(chat, times(2)).answerWithSchema(
+        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.anyString());
+  }
+
+  @Test
   void rejectsASeparateFraudOrSafetyVerdict() {
     when(chat.answerWithSchema(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
         org.mockito.ArgumentMatchers.anyString()))

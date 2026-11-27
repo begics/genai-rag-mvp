@@ -75,6 +75,11 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
         output = chat.answerWithSchema(
             retryInstructions(lastFailure), providerText, SCHEMA.formatted(locationConstraint(providerText)));
       } catch (ResponseStatusException exception) {
+        int status = exception.getStatusCode().value();
+        if (attempt + 1 < MAX_SCREENING_ATTEMPTS
+            && (status == HttpStatus.BAD_GATEWAY.value() || status == HttpStatus.SERVICE_UNAVAILABLE.value())) {
+          continue;
+        }
         throw exception;
       } catch (RuntimeException exception) {
         throw new ResponseStatusException(
