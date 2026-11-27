@@ -135,6 +135,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install live evaluation dependencies
+        run: npm ci --no-audit --no-fund
+
       - name: Install browser test runtime
         run: |
           npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
@@ -157,6 +160,12 @@ jobs:
 
       - name: Run authenticated browser test with real models
         run: node scripts/agent-live-e2e.cjs
+
+      - name: Run synthetic live RAG evaluation
+        run: npm run eval:rag:live
+
+      - name: Run synthetic live agent evaluation
+        run: npm run eval:agent:live
 
       - name: Save browser evidence
         if: always()
