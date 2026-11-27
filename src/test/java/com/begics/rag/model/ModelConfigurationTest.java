@@ -63,10 +63,10 @@ class ModelConfigurationTest {
           assertThat(properties.rerankUrl())
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/cohere/v2/rerank");
           assertThat(properties.agentPlannerModel())
-              .isEqualTo("mistralai/Ministral-3-14B-Instruct-2512");
+              .isEqualTo("google/gemma-4-31B-it");
           assertThat(InfomaniakAiModels.chatOptions(properties).getModel()).isEqualTo("test-chat");
           assertThat(InfomaniakAiModels.chatOptions(properties, properties.agentPlannerModel()).getModel())
-              .isEqualTo("mistralai/Ministral-3-14B-Instruct-2512");
+              .isEqualTo("google/gemma-4-31B-it");
           assertThat(InfomaniakAiModels.validateEmbeddingDimensions(new float[768], 768)).hasSize(768);
         });
   }
@@ -91,6 +91,14 @@ class ModelConfigurationTest {
           assertThat(InfomaniakAiModels.chatOptions(properties, properties.agentPlannerModel()).getModel())
               .isEqualTo("test-small-planner");
         });
+  }
+
+  @Test
+  void keepsTheConfiguredModelWhenUsingStructuredOutputOptions() {
+    var options = InfomaniakAiModels.structuredOutputOptions("test-small-planner", "{\"type\":\"object\"}");
+
+    assertThat(options.getModel()).isEqualTo("test-small-planner");
+    assertThat(options.getOutputSchema()).isEqualTo("{\"type\":\"object\"}");
   }
 
   @Test

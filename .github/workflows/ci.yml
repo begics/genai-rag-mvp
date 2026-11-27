@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,3 +47,115 @@ jobs:
 
       - name: Build application image
         run: docker build --tag genai-rag-mvp:ci .
+
+  live-agent-e2e:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      KEYCLOAK_ADMIN_USERNAME: ${{ secrets.AGENT_E2E_USERNAME }}
+      KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.AGENT_E2E_PASSWORD }}
+      INFOMANIAK_AI_API_KEY: ${{ secrets.INFOMANIAK_AI_API_KEY }}
+      INFOMANIAK_AI_PRODUCT_ID: ${{ secrets.INFOMANIAK_AI_PRODUCT_ID }}
+      INFOMANIAK_AI_CHAT_MODEL: ${{ secrets.INFOMANIAK_AI_CHAT_MODEL }}
+      INFOMANIAK_AI_EMBEDDING_MODEL: ${{ secrets.INFOMANIAK_AI_EMBEDDING_MODEL }}
+      INFOMANIAK_AI_RERANK_MODEL: ${{ secrets.INFOMANIAK_AI_RERANK_MODEL }}
+      INFOMANIAK_AI_AGENT_PLANNER_MODEL: ${{ secrets.INFOMANIAK_AI_AGENT_PLANNER_MODEL }}
+      RAG_EMBEDDING_DIMENSIONS: ${{ secrets.RAG_EMBEDDING_DIMENSIONS }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Create isolated live-test environment
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          required = (
+              "KEYCLOAK_ADMIN_USERNAME",
+              "KEYCLOAK_ADMIN_PASSWORD",
+              "INFOMANIAK_AI_API_KEY",
+              "INFOMANIAK_AI_PRODUCT_ID",
+              "INFOMANIAK_AI_CHAT_MODEL",
+              "INFOMANIAK_AI_EMBEDDING_MODEL",
+              "INFOMANIAK_AI_RERANK_MODEL",
+              "RAG_EMBEDDING_DIMENSIONS",
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("Missing required GitHub Actions secrets: " + ", ".join(missing))
+
+          values = {
+              "DATABASE_USERNAME": "rag",
+              "DATABASE_PASSWORD": "ci-database-password",
+              "KEYCLOAK_ADMIN_USERNAME": os.environ["KEYCLOAK_ADMIN_USERNAME"],
+              "KEYCLOAK_ADMIN_PASSWORD": os.environ["KEYCLOAK_ADMIN_PASSWORD"],
+              "KEYCLOAK_ADMIN_EMAIL": "agent-e2e@localhost",
+              "KEYCLOAK_PUBLIC_URL": "http://localhost:8180",
+              "S3_ACCESS_KEY": "ci-access-key",
+              "S3_SECRET_KEY": "ci-storage-password",
+              "S3_REGION": "us-east-1",
+              "S3_BUCKET": "rag-documents",
+              "CLOUDFLARED_TUNNEL_TOKEN": "ci-placeholder-token",
+              "RAG_PROVIDER": "infomaniak",
+              "RAG_EMBEDDING_DIMENSIONS": os.environ["RAG_EMBEDDING_DIMENSIONS"],
+              "INFOMANIAK_AI_API_KEY": os.environ["INFOMANIAK_AI_API_KEY"],
+              "INFOMANIAK_AI_PRODUCT_ID": os.environ["INFOMANIAK_AI_PRODUCT_ID"],
+              "INFOMANIAK_AI_CHAT_MODEL": os.environ["INFOMANIAK_AI_CHAT_MODEL"],
+              "INFOMANIAK_AI_EMBEDDING_MODEL": os.environ["INFOMANIAK_AI_EMBEDDING_MODEL"],
+              "INFOMANIAK_AI_RERANK_MODEL": os.environ["INFOMANIAK_AI_RERANK_MODEL"],
+              "INFOMANIAK_AI_AGENT_PLANNER_MODEL": os.environ.get(
+                  "INFOMANIAK_AI_AGENT_PLANNER_MODEL",
+                  "google/gemma-4-31B-it",
+              ),
+          }
+          lines = []
+          for key, value in values.items():
+              if "\n" in value or "\r" in value:
+                  raise SystemExit(f"GitHub Actions secret {key} must not contain a newline.")
+              escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+              lines.append(f"{key}='{escaped}'")
+          Path(".env").write_text("\n".join(lines) + "\n")
+          Path(".env").chmod(0o600)
+          PY
+
+      - name: Verify live-test Compose configuration
+        run: docker compose config --quiet
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Start isolated live-test stack
+        run: docker compose up -d --build app
+
+      - name: Wait for the application
+        run: curl --fail --retry 60 --retry-delay 3 --retry-connrefused http://localhost:8080/actuator/health
+
+      - name: Run authenticated browser test with real models
+        run: node scripts/agent-live-e2e.cjs
+
+      - name: Save browser evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-live-e2e-browser
+          path: test-results/agent-live-e2e.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop isolated live-test stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

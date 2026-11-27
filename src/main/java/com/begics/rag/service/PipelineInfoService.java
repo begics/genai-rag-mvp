@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PipelineInfoService {
   private static final String DEFAULT_AGENT_PLANNER_MODEL =
-      "mistralai/Ministral-3-14B-Instruct-2512";
+      "google/gemma-4-31B-it";
 
   private final Environment environment;
 

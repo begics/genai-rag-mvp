@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
 class PipelineInfoServiceTest {
-  private static final String DEFAULT_PLANNER_MODEL = "mistralai/Ministral-3-14B-Instruct-2512";
+  private static final String DEFAULT_PLANNER_MODEL = "google/gemma-4-31B-it";
 
   @Test
   void reportsTheDefaultSmallPlannerAndKeepsTheAnswerModelVisible() {

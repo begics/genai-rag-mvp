@@ -59,7 +59,7 @@ rag:
     product-id: ${INFOMANIAK_AI_PRODUCT_ID:}
     api-key: ${INFOMANIAK_AI_API_KEY:}
     chat-model: ${INFOMANIAK_AI_CHAT_MODEL:}
-    agent-planner-model: ${INFOMANIAK_AI_AGENT_PLANNER_MODEL:mistralai/Ministral-3-14B-Instruct-2512}
+    agent-planner-model: ${INFOMANIAK_AI_AGENT_PLANNER_MODEL:google/gemma-4-31B-it}
     embedding-model: ${INFOMANIAK_AI_EMBEDDING_MODEL:}
     rerank-model: ${INFOMANIAK_AI_RERANK_MODEL:}
     transcription:

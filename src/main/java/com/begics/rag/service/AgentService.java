@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,8 +43,14 @@ public class AgentService {
         .map(document -> new AgentPlanner.AgentDocument(
             document.id(), filename(document.source()), extension(document.source())))
         .toList();
-    AgentPlanner.AgentPlan plan = planner.plan(request.question(), plannerDocuments);
-    List<String> queries = validateSearchQueries(plan);
+    AgentPlanner.AgentPlan plan;
+    try {
+      plan = planner.plan(request.question(), plannerDocuments);
+    } catch (AgentPlanner.InvalidPlanException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+          "Agent planner returned invalid structured output", exception);
+    }
+    List<String> queries = validatePlan(plan, indexedDocuments, plannerDocuments);
     List<ApiModels.AgentStepResponse> steps = new ArrayList<>();
     steps.add(step("planner", "completed", "Plan the task",
         "Selected " + queries.size() + (queries.size() == 1 ? " workspace search query" : " workspace search queries")
@@ -104,7 +111,9 @@ public class AgentService {
     return result;
   }
 
-  private static List<String> validateSearchQueries(AgentPlanner.AgentPlan plan) {
+  private static List<String> validatePlan(
+      AgentPlanner.AgentPlan plan, List<DocumentStore.IndexedDocument> indexedDocuments,
+      List<AgentPlanner.AgentDocument> plannerDocuments) {
     if (plan == null || plan.searchQueries() == null || plan.searchQueries().isEmpty()
         || plan.searchQueries().size() > MAX_SEARCH_QUERIES) {
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent planner returned an invalid search plan");
@@ -119,7 +128,38 @@ public class AgentService {
     if (unique.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Agent planner returned an empty search plan");
     }
+    validateComparison(plan, indexedDocuments, plannerDocuments);
     return List.copyOf(unique);
+  }
+
+  private static void validateComparison(
+      AgentPlanner.AgentPlan plan, List<DocumentStore.IndexedDocument> indexedDocuments,
+      List<AgentPlanner.AgentDocument> plannerDocuments) {
+    if (plan.firstDocumentId() == null && plan.secondDocumentId() == null) {
+      return;
+    }
+    if (plan.firstDocumentId() == null || plan.secondDocumentId() == null
+        || plan.firstDocumentId().equals(plan.secondDocumentId())) {
+      throw invalidComparisonPlan();
+    }
+    Map<String, DocumentStore.IndexedDocument> byId = indexedDocuments.stream()
+        .collect(Collectors.toMap(DocumentStore.IndexedDocument::id, Function.identity(), (first, ignored) -> first));
+    Set<String> plannerDocumentIds = plannerDocuments.stream()
+        .map(AgentPlanner.AgentDocument::id)
+        .collect(Collectors.toSet());
+    DocumentStore.IndexedDocument first = byId.get(plan.firstDocumentId());
+    DocumentStore.IndexedDocument second = byId.get(plan.secondDocumentId());
+    if (!plannerDocumentIds.contains(plan.firstDocumentId())
+        || !plannerDocumentIds.contains(plan.secondDocumentId())
+        || first == null || second == null || first.chunks() <= 0 || second.chunks() <= 0
+        || !isComparable(first.source()) || !isComparable(second.source())) {
+      throw invalidComparisonPlan();
+    }
+  }
+
+  private static ResponseStatusException invalidComparisonPlan() {
+    return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+        "Agent planner returned invalid workspace document IDs for comparison");
   }
 
   private static boolean isComparable(String source) {

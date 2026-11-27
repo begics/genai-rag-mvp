@@ -156,25 +156,21 @@ class AgentPlanningFlowTest {
   }
 
   @Test
-  void skipsComparisonWhenPlannerReturnsAnUnknownDocumentId() throws Exception {
+  void rejectsUnknownComparisonDocumentIdsBeforeCallingTools() throws Exception {
     when(plannerChat.answerWithSchema(anyString(), anyString(), anyString()))
         .thenReturn(plan("""
             "searchQueries":["policy"],
             "firstDocumentId":"manual-1","secondDocumentId":"not-in-workspace",
             "comparisonRationale":"Compare documents"
             """));
-    when(rag.queryWithSearchQueries(anyString(), any(), eq(WORKSPACE_ID), any(), any()))
-        .thenReturn(new ApiModels.QueryResponse("Answer", List.of()));
 
     mvc.perform(post("/api/agent/query")
             .header("X-Workspace-ID", WORKSPACE_HEADER)
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"question\":\"Compare documents\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.comparison").value(org.hamcrest.Matchers.nullValue()))
-        .andExpect(jsonPath("$.steps[1].status").value("skipped"));
+        .andExpect(status().isBadGateway());
 
-    verifyNoInteractions(comparison);
+    verifyNoInteractions(rag, comparison);
   }
 
   @Test
@@ -231,6 +227,24 @@ class AgentPlanningFlowTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"question\":\"Find something\"}"))
         .andExpect(status().isBadGateway());
+
+    verifyNoInteractions(rag, comparison);
+  }
+
+  @Test
+  void rejectsUnknownPlannerJsonFieldsAsBadGatewayWithoutRunningTools() throws Exception {
+    when(plannerChat.answerWithSchema(anyString(), anyString(), anyString()))
+        .thenReturn("""
+            {"searchQueries":["one"],"firstDocumentId":null,"secondDocumentId":null,
+             "comparisonRationale":null,"unexpected":"value"}
+            """);
+
+    mvc.perform(post("/api/agent/query")
+            .header("X-Workspace-ID", WORKSPACE_HEADER)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"question\":\"Find something\"}"))
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.error").value("Agent planner returned invalid structured output"));
 
     verifyNoInteractions(rag, comparison);
   }

@@ -5,6 +5,16 @@ import java.util.List;
 public interface AgentPlanner {
   AgentPlan plan(String question, List<AgentDocument> documents);
 
+  final class InvalidPlanException extends IllegalStateException {
+    public InvalidPlanException(String message) {
+      super(message);
+    }
+
+    public InvalidPlanException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
   record AgentPlan(
       List<String> searchQueries,
       String firstDocumentId,

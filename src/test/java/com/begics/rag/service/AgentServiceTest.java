@@ -89,21 +89,50 @@ class AgentServiceTest {
   }
 
   @Test
-  void skipsComparisonWhenPlannerInventsAnUnknownDocumentId() {
+  void rejectsComparisonWhenPlannerInventsAnUnknownDocumentIdBeforeSearching() {
     when(documents.listDocuments(WORKSPACE_ID)).thenReturn(List.of(
         new DocumentStore.IndexedDocument("known", "uploads/" + WORKSPACE_ID + "/known.txt", 1, 10)));
     when(planner.plan(any(), any())).thenReturn(
         new AgentPlanner.AgentPlan(List.of("question"), "known", "invented", "compare"));
-    when(rag.queryWithSearchQueries(any(), any(), eq(WORKSPACE_ID), any(), any()))
-        .thenReturn(new ApiModels.QueryResponse("answer", List.of()));
 
-    var result = service.query(new ApiModels.AgentQueryRequest("question", null, null, null), WORKSPACE_ID);
+    assertThatThrownBy(() -> service.query(
+        new ApiModels.AgentQueryRequest("question", null, null, null), WORKSPACE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("invalid workspace document IDs");
 
-    assertThat(result.comparison()).isNull();
-    assertThat(result.steps()).anySatisfy(step -> {
-      assertThat(step.tool()).isEqualTo("document-compare");
-      assertThat(step.status()).isEqualTo("skipped");
-    });
-    Mockito.verifyNoInteractions(comparison);
+    Mockito.verifyNoInteractions(rag, comparison);
+  }
+
+  @Test
+  void rejectsIncompleteComparisonIdsBeforeSearching() {
+    when(documents.listDocuments(WORKSPACE_ID)).thenReturn(List.of(
+        new DocumentStore.IndexedDocument("known", "uploads/" + WORKSPACE_ID + "/known.txt", 1, 10)));
+    when(planner.plan(any(), any())).thenReturn(
+        new AgentPlanner.AgentPlan(List.of("question"), "known", null, null));
+
+    assertThatThrownBy(() -> service.query(
+        new ApiModels.AgentQueryRequest("question", null, null, null), WORKSPACE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("invalid workspace document IDs");
+
+    Mockito.verifyNoInteractions(rag, comparison);
+  }
+
+  @Test
+  void rejectsComparisonIdsOutsideTheBoundedPlannerDocumentList() {
+    List<DocumentStore.IndexedDocument> indexedDocuments = java.util.stream.IntStream.range(0, 101)
+        .mapToObj(index -> new DocumentStore.IndexedDocument(
+            "doc-" + index, "uploads/" + WORKSPACE_ID + "/document-" + index + ".txt", 1, 10))
+        .toList();
+    when(documents.listDocuments(WORKSPACE_ID)).thenReturn(indexedDocuments);
+    when(planner.plan(eq("question"), any())).thenReturn(
+        new AgentPlanner.AgentPlan(List.of("question"), "doc-0", "doc-100", "compare"));
+
+    assertThatThrownBy(() -> service.query(
+        new ApiModels.AgentQueryRequest("question", null, null, null), WORKSPACE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("invalid workspace document IDs");
+
+    Mockito.verifyNoInteractions(rag, comparison);
   }
 }

@@ -13,6 +13,7 @@ target/
 
 # Node.js evaluation dependencies
 node_modules/
+test-results/
 .promptfoo/
 
 # Local IDE configuration

@@ -20,7 +20,7 @@ import org.springframework.web.util.UriUtils;
 @ConditionalOnProperty(name = "rag.provider", havingValue = "infomaniak")
 public class InfomaniakAiModels {
   private static final String DEFAULT_AGENT_PLANNER_MODEL =
-      "mistralai/Ministral-3-14B-Instruct-2512";
+      "google/gemma-4-31B-it";
 
   @Bean
   EmbeddingModel infomaniakEmbeddingModel(InfomaniakAiProperties properties) {
@@ -75,7 +75,7 @@ public class InfomaniakAiModels {
       public String answerWithSchema(String instructions, String context, String jsonSchema) {
         Prompt prompt = new Prompt(
             List.of(new SystemMessage(instructions), new UserMessage(context)),
-            OpenAiChatOptions.builder().outputSchema(jsonSchema).build());
+            structuredOutputOptions(modelName, jsonSchema));
         return model.call(prompt).getResult().getOutput().getText();
       }
     };
@@ -108,6 +108,13 @@ public class InfomaniakAiModels {
         .model(modelName)
         .baseUrl(properties.baseUrl())
         .apiKey(properties.apiKey())
+        .build();
+  }
+
+  static OpenAiChatOptions structuredOutputOptions(String modelName, String jsonSchema) {
+    return OpenAiChatOptions.builder()
+        .model(modelName)
+        .outputSchema(jsonSchema)
         .build();
   }
 

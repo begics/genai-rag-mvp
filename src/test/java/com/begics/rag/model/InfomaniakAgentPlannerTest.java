@@ -78,10 +78,50 @@ class InfomaniakAgentPlannerTest {
     when(chat.answerWithSchema(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
         .thenReturn("not JSON");
 
-    assertThatThrownBy(() -> new InfomaniakAgentPlanner(chat, JsonMapper.builder().build())
-        .plan("question", List.of()))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("invalid structured output");
+    assertInvalidOutput(chat);
+  }
+
+  @Test
+  void rejectsUnknownPlannerFields() {
+    assertInvalidOutput("""
+        {"searchQueries":["question"],"firstDocumentId":null,"secondDocumentId":null,
+         "comparisonRationale":null,"unexpected":"value"}
+        """);
+  }
+
+  @Test
+  void rejectsMissingRequiredPlannerFields() {
+    assertInvalidOutput("""
+        {"searchQueries":["question"],"firstDocumentId":null,"secondDocumentId":null}
+        """);
+  }
+
+  @Test
+  void rejectsIncorrectPlannerFieldTypesInsteadOfCoercingThem() {
+    assertInvalidOutput("""
+        {"searchQueries":[123],"firstDocumentId":null,"secondDocumentId":null,
+         "comparisonRationale":null}
+        """);
+  }
+
+  @Test
+  void rejectsDuplicateFieldsAndTrailingJsonValues() {
+    assertInvalidOutput("""
+        {"searchQueries":["question"],"searchQueries":["another"],"firstDocumentId":null,
+         "secondDocumentId":null,"comparisonRationale":null}
+        """);
+    assertInvalidOutput("""
+        {"searchQueries":["question"],"firstDocumentId":null,"secondDocumentId":null,
+         "comparisonRationale":null} {}
+        """);
+  }
+
+  @Test
+  void rejectsNullSearchQueries() {
+    assertInvalidOutput("""
+        {"searchQueries":null,"firstDocumentId":null,"secondDocumentId":null,
+         "comparisonRationale":null}
+        """);
   }
 
   @Test
@@ -94,5 +134,19 @@ class InfomaniakAgentPlannerTest {
         .plan("question", List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("provider unavailable");
+  }
+
+  private static void assertInvalidOutput(String output) {
+    StructuredChatModel chat = Mockito.mock(StructuredChatModel.class);
+    when(chat.answerWithSchema(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(output);
+    assertInvalidOutput(chat);
+  }
+
+  private static void assertInvalidOutput(StructuredChatModel chat) {
+    assertThatThrownBy(() -> new InfomaniakAgentPlanner(chat, JsonMapper.builder().build())
+        .plan("question", List.of()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Agent planner returned invalid structured output");
   }
 }
