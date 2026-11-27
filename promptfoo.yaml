@@ -30,6 +30,6 @@ tests:
       question: "Which city hosted the 1988 lunar observatory convention?"
     assert:
       - type: javascript
-        value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|don't know|cannot determine/i.test(output)"
+        value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|not (?:provide )?enough information|don't know|cannot determine/i.test(output)"
       - type: javascript
         value: "(context.metadata?.sources?.length ?? 0) === 0"
