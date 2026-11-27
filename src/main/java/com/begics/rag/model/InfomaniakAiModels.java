@@ -19,6 +19,9 @@ import org.springframework.web.util.UriUtils;
 @Configuration
 @ConditionalOnProperty(name = "rag.provider", havingValue = "infomaniak")
 public class InfomaniakAiModels {
+  private static final String DEFAULT_AGENT_PLANNER_MODEL =
+      "mistralai/Ministral-3-14B-Instruct-2512";
+
   @Bean
   EmbeddingModel infomaniakEmbeddingModel(InfomaniakAiProperties properties) {
     org.springframework.ai.embedding.EmbeddingModel model = OpenAiEmbeddingModel.builder()
@@ -46,8 +49,20 @@ public class InfomaniakAiModels {
 
   @Bean
   StructuredChatModel infomaniakChatModel(InfomaniakAiProperties properties) {
+    return structuredChatModel(properties, properties.chatModel());
+  }
+
+  @Bean
+  AgentPlanner infomaniakAgentPlanner(InfomaniakAiProperties properties, ObjectMapper objectMapper) {
+    StructuredChatModel plannerChat =
+        structuredChatModel(properties, properties.agentPlannerModel());
+    return new InfomaniakAgentPlanner(plannerChat, objectMapper);
+  }
+
+  private static StructuredChatModel structuredChatModel(
+      InfomaniakAiProperties properties, String modelName) {
     org.springframework.ai.chat.model.ChatModel model = OpenAiChatModel.builder()
-        .options(chatOptions(properties))
+        .options(chatOptions(properties, modelName))
         .build();
     return new StructuredChatModel() {
       @Override
@@ -72,11 +87,6 @@ public class InfomaniakAiModels {
   }
 
   @Bean
-  AgentPlanner infomaniakAgentPlanner(StructuredChatModel chat, ObjectMapper objectMapper) {
-    return new InfomaniakAgentPlanner(chat, objectMapper);
-  }
-
-  @Bean
   RestClient.Builder infomaniakRestClientBuilder() {
     return RestClient.builder();
   }
@@ -90,8 +100,12 @@ public class InfomaniakAiModels {
   }
 
   static OpenAiChatOptions chatOptions(InfomaniakAiProperties properties) {
+    return chatOptions(properties, properties.chatModel());
+  }
+
+  static OpenAiChatOptions chatOptions(InfomaniakAiProperties properties, String modelName) {
     return OpenAiChatOptions.builder()
-        .model(properties.chatModel())
+        .model(modelName)
         .baseUrl(properties.baseUrl())
         .apiKey(properties.apiKey())
         .build();
@@ -102,6 +116,10 @@ public class InfomaniakAiModels {
     String productId = required(environment, "rag.infomaniak.product-id", "INFOMANIAK_AI_PRODUCT_ID");
     String apiKey = required(environment, "rag.infomaniak.api-key", "INFOMANIAK_AI_API_KEY");
     String chatModel = required(environment, "rag.infomaniak.chat-model", "INFOMANIAK_AI_CHAT_MODEL");
+    String agentPlannerModel = environment.getProperty("rag.infomaniak.agent-planner-model");
+    if (agentPlannerModel == null || agentPlannerModel.isBlank()) {
+      agentPlannerModel = DEFAULT_AGENT_PLANNER_MODEL;
+    }
     String embeddingModel = required(environment, "rag.infomaniak.embedding-model", "INFOMANIAK_AI_EMBEDDING_MODEL");
     String rerankModel = required(environment, "rag.infomaniak.rerank-model", "INFOMANIAK_AI_RERANK_MODEL");
     int dimensions = EmbeddingDimensions.configured(environment);
@@ -111,7 +129,7 @@ public class InfomaniakAiModels {
         throw new IllegalStateException("INFOMANIAK_AI_PRODUCT_ID must be a positive integer");
       }
       return new InfomaniakAiProperties(
-          parsedProductId, apiKey, chatModel, embeddingModel, rerankModel, dimensions);
+          parsedProductId, apiKey, chatModel, agentPlannerModel, embeddingModel, rerankModel, dimensions);
     } catch (NumberFormatException exception) {
       throw new IllegalStateException(
           "INFOMANIAK_AI_PRODUCT_ID must be an integer", exception);
@@ -137,8 +155,8 @@ public class InfomaniakAiModels {
   }
 
   record InfomaniakAiProperties(
-      int productId, String apiKey, String chatModel, String embeddingModel, String rerankModel,
-      int embeddingDimensions) {
+      int productId, String apiKey, String chatModel, String agentPlannerModel, String embeddingModel,
+      String rerankModel, int embeddingDimensions) {
     String baseUrl() {
       return "https://api.infomaniak.com/2/ai/" + productId + "/openai/v1";
     }

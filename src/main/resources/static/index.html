@@ -354,7 +354,7 @@
           <li class="pipeline-step"><strong>AI embeddings</strong><small data-pipeline-query-embedding>Same service and model</small></li>
           <li class="pipeline-step"><strong>PostgreSQL</strong>pgvector search</li>
           <li class="pipeline-step"><strong>AI reranker</strong><small data-pipeline-service="rerank">Loading service…</small><small data-pipeline-model="rerank">Loading model…</small></li>
-          <li class="pipeline-step"><strong>Chat LLM</strong><small data-pipeline-service="chat">Loading service…</small><small data-pipeline-model="chat">Loading model…</small></li>
+          <li class="pipeline-step"><strong>Answer &amp; extraction LLM</strong><small data-pipeline-service="chat">Loading service…</small><small data-pipeline-model="chat">Loading model…</small><small>Generates grounded answers and extracts invoice fields</small></li>
           <li class="pipeline-step"><strong>Browser</strong>Answer + sources</li>
         </ol>
       </div>
@@ -362,7 +362,7 @@
         <h3 class="pipeline-lane-title">3 · Agentic orchestration · read-only tools</h3>
         <p class="pipeline-status" id="agent-status" role="status" aria-live="polite">Sign in to run the configured planner and read-only tools. Component configuration is shown below; provider availability is not live-checked.</p>
         <ol class="pipeline-steps" aria-label="Agentic question workflow">
-          <li class="pipeline-step"><strong>Agent planner</strong>Builds a bounded plan from the question and this workspace's indexed file list</li>
+          <li class="pipeline-step"><strong>Agent planner · planning only</strong>Builds a bounded plan from the question and this workspace's indexed file list<small data-pipeline-model="agent-planner">Loading planner model…</small></li>
           <li class="pipeline-step"><strong>Search tool</strong>Runs up to 3 planned hybrid searches with current workspace filters</li>
           <li class="pipeline-step"><strong>Compare tool</strong>Optional exact paragraph comparison for two listed text/PDF documents</li>
           <li class="pipeline-step"><strong>Evidence merge</strong>Deduplicates passages and reranks them against the original question</li>
@@ -378,7 +378,7 @@
         <span class="pipeline-component"><strong>Chunking:</strong> 1,500 characters · 200 overlap</span>
         <span class="pipeline-component"><strong>Object storage:</strong> RustFS · S3 API</span>
         <span class="pipeline-component"><strong>Queue &amp; vector DB:</strong> PostgreSQL · pgvector</span>
-        <span class="pipeline-component"><strong>Agent planner:</strong> <span data-pipeline-model="agent-planner">Loading…</span></span>
+        <span class="pipeline-component"><strong>Model routing:</strong> the planner model plans; the chat model answers and extracts invoice fields</span>
         <span class="pipeline-component"><strong>Agent tools:</strong> <span data-pipeline-model="agent-tools">Loading…</span></span>
         <span class="pipeline-component"><strong>Agent guardrails:</strong> read-only · max <span data-pipeline-model="agent-search-limit">3</span> searches · listed document IDs only</span>
         <span class="pipeline-component"><strong>Agent runtime:</strong> configured only · provider availability is not live-checked</span>

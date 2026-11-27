@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PipelineInfoService {
+  private static final String DEFAULT_AGENT_PLANNER_MODEL =
+      "mistralai/Ministral-3-14B-Instruct-2512";
+
   private final Environment environment;
 
   public PipelineInfoService(Environment environment) {
@@ -24,7 +27,9 @@ public class PipelineInfoService {
           environment.getProperty("rag.infomaniak.rerank-model", "Not configured"),
           "OpenAI-compatible Chat Completions API",
           environment.getProperty("rag.infomaniak.chat-model", "Not configured"),
-          "Infomaniak structured-output planner · configured, not live health-checked",
+          "Infomaniak structured-output planner · "
+              + agentPlannerModel()
+              + " · configured, not live health-checked",
           "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
           3);
     }
@@ -40,5 +45,10 @@ public class PipelineInfoService {
         "Deterministic local single-query planner · no provider calls",
         "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
         3);
+  }
+
+  private String agentPlannerModel() {
+    String configured = environment.getProperty("rag.infomaniak.agent-planner-model");
+    return configured == null || configured.isBlank() ? DEFAULT_AGENT_PLANNER_MODEL : configured;
   }
 }

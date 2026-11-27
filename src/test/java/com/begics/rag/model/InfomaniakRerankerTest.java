@@ -20,7 +20,7 @@ class InfomaniakRerankerTest {
     RestClient.Builder builder = RestClient.builder();
     MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     var properties = new InfomaniakAiModels.InfomaniakAiProperties(
-        114047, "test-secret", "chat", "embedding", "BAAI/bge-reranker-v2-m3", 3_584);
+        114047, "test-secret", "chat", "planner", "embedding", "BAAI/bge-reranker-v2-m3", 3_584);
     server.expect(requestTo(properties.rerankUrl()))
         .andExpect(method(HttpMethod.POST))
         .andExpect(header("Authorization", "Bearer test-secret"))

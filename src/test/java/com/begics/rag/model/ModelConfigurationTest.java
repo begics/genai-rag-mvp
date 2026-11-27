@@ -62,7 +62,34 @@ class ModelConfigurationTest {
           assertThat(properties.rerankModel()).isEqualTo("test-reranker");
           assertThat(properties.rerankUrl())
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/cohere/v2/rerank");
+          assertThat(properties.agentPlannerModel())
+              .isEqualTo("mistralai/Ministral-3-14B-Instruct-2512");
+          assertThat(InfomaniakAiModels.chatOptions(properties).getModel()).isEqualTo("test-chat");
+          assertThat(InfomaniakAiModels.chatOptions(properties, properties.agentPlannerModel()).getModel())
+              .isEqualTo("mistralai/Ministral-3-14B-Instruct-2512");
           assertThat(InfomaniakAiModels.validateEmbeddingDimensions(new float[768], 768)).hasSize(768);
+        });
+  }
+
+  @Test
+  void allowsThePlannerModelToBeOverriddenIndependently() {
+    contextRunner.withPropertyValues(
+        "rag.provider=infomaniak",
+        "rag.infomaniak.product-id=12345",
+        "rag.infomaniak.api-key=test-key",
+        "rag.infomaniak.chat-model=test-answer-model",
+        "rag.infomaniak.agent-planner-model=test-small-planner",
+        "rag.infomaniak.embedding-model=test-embedding",
+        "rag.infomaniak.rerank-model=test-reranker",
+        "rag.embedding-dimensions=768").run(context -> {
+          assertThat(context).hasNotFailed();
+          InfomaniakAiModels.InfomaniakAiProperties properties =
+              context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);
+          assertThat(properties.chatModel()).isEqualTo("test-answer-model");
+          assertThat(properties.agentPlannerModel()).isEqualTo("test-small-planner");
+          assertThat(InfomaniakAiModels.chatOptions(properties).getModel()).isEqualTo("test-answer-model");
+          assertThat(InfomaniakAiModels.chatOptions(properties, properties.agentPlannerModel()).getModel())
+              .isEqualTo("test-small-planner");
         });
   }
 

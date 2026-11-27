@@ -288,6 +288,22 @@ class SecurityConfigurationTest {
   }
 
   @Test
+  void showsPlannerAndAnswerModelsAsSeparatePipelineComponents() throws Exception {
+    String html;
+    try (var stream = getClass().getResourceAsStream("/static/index.html")) {
+      org.assertj.core.api.Assertions.assertThat(stream).isNotNull();
+      html = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    org.assertj.core.api.Assertions.assertThat(html)
+        .contains("Agent planner · planning only")
+        .contains("data-pipeline-model=\"agent-planner\"")
+        .contains("Answer &amp; extraction LLM")
+        .contains("data-pipeline-model=\"chat\"")
+        .contains("the planner model plans; the chat model answers and extracts invoice fields");
+  }
+
+  @Test
   void contentSecurityPolicyAllowsTheCurrentInlineUiBlocks() throws Exception {
     var response = mvc.perform(get("/")).andExpect(status().isOk()).andReturn().getResponse();
     String policy = response.getHeader("Content-Security-Policy");

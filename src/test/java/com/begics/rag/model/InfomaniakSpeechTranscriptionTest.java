@@ -17,7 +17,7 @@ import org.springframework.web.client.RestClient;
 class InfomaniakSpeechTranscriptionTest {
   private static final InfomaniakAiModels.InfomaniakAiProperties PROPERTIES =
       new InfomaniakAiModels.InfomaniakAiProperties(
-          114047, "test-secret", "chat", "embedding", "reranker", 3_584);
+          114047, "test-secret", "chat", "planner", "embedding", "reranker", 3_584);
 
   @Test
   void submitsAudioPollsTheAsyncBatchAndDownloadsItsTranscript() {
