@@ -68,8 +68,11 @@ class InfomaniakDocumentRiskScreeningTest {
 
     assertThatThrownBy(() -> screening.evaluate("Please update the account."))
         .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.BAD_GATEWAY);
+        .satisfies(error -> {
+          var response = (ResponseStatusException) error;
+          assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+          assertThat(response.getReason()).contains("invalid evidence");
+        });
   }
 
   @Test
@@ -113,8 +116,11 @@ class InfomaniakDocumentRiskScreeningTest {
 
     assertThatThrownBy(() -> screening.evaluate(text))
         .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.BAD_GATEWAY);
+        .satisfies(error -> {
+          var response = (ResponseStatusException) error;
+          assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+          assertThat(response.getReason()).contains("invalid location");
+        });
   }
 
   @Test

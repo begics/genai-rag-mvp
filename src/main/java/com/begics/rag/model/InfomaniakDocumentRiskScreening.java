@@ -74,37 +74,42 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
     } catch (ResponseStatusException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw invalidResponse();
+      throw invalidResponse("JSON");
     }
   }
 
   private static ScreeningResult parseResult(JsonNode root, String text) {
     if (root == null || !root.isObject() || root.size() != 1 || !root.has("findings")) {
-      throw invalidResponse();
+      throw invalidResponse("structure");
     }
     JsonNode findingsNode = root.get("findings");
     if (!findingsNode.isArray() || findingsNode.size() > 8) {
-      throw invalidResponse();
+      throw invalidResponse("findings");
     }
     List<Finding> findings = new ArrayList<>();
     for (JsonNode finding : findingsNode) {
       if (!finding.isObject() || finding.size() != 4
           || !finding.has("category") || !finding.has("evidence")
           || !finding.has("location") || !finding.has("uncertainty")) {
-        throw invalidResponse();
+        throw invalidResponse("finding structure");
       }
       JsonNode category = finding.get("category");
       JsonNode evidence = finding.get("evidence");
       JsonNode location = finding.get("location");
       JsonNode uncertainty = finding.get("uncertainty");
-      if (!category.isTextual() || !CATEGORIES.contains(category.asText())
-          || !evidence.isTextual() || evidence.asText().isBlank() || evidence.asText().length() > 300
-          || !text.contains(evidence.asText())
-          || !location.isTextual() || location.asText().length() > 100
-          || !location.asText().equals(sourceLocation(text, text.indexOf(evidence.asText())))
-          || !uncertainty.isTextual() || uncertainty.asText().isBlank()
-          || uncertainty.asText().length() > 500) {
-        throw invalidResponse();
+      if (!category.isTextual() || !CATEGORIES.contains(category.asText())) {
+        throw invalidResponse("category");
+      }
+      if (!evidence.isTextual() || evidence.asText().isBlank() || evidence.asText().length() > 300
+          || !text.contains(evidence.asText())) {
+        throw invalidResponse("evidence");
+      }
+      if (!location.isTextual() || location.asText().length() > 100
+          || !location.asText().equals(sourceLocation(text, text.indexOf(evidence.asText())))) {
+        throw invalidResponse("location");
+      }
+      if (!uncertainty.isTextual() || uncertainty.asText().isBlank() || uncertainty.asText().length() > 500) {
+        throw invalidResponse("uncertainty");
       }
       findings.add(new Finding(category.asText(), evidence.asText(), location.asText(), uncertainty.asText()));
     }
@@ -113,7 +118,7 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
 
   private static String sourceLocation(String text, int offset) {
     if (offset < 0) {
-      throw invalidResponse();
+      throw invalidResponse("evidence");
     }
     int pageBreak = text.lastIndexOf('\f', offset);
     int lineStart = pageBreak + 1;
@@ -135,8 +140,9 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
     return text.indexOf('\n') >= 0 ? "Line " + line : LOCATION_UNAVAILABLE;
   }
 
-  private static ResponseStatusException invalidResponse() {
+  private static ResponseStatusException invalidResponse(String field) {
     return new ResponseStatusException(
-        HttpStatus.BAD_GATEWAY, "The AI provider returned document screening results that failed validation");
+        HttpStatus.BAD_GATEWAY,
+        "The AI provider returned document screening results that failed validation: invalid " + field);
   }
 }

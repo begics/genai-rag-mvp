@@ -203,8 +203,9 @@ export class RagSession {
       if (status.status === 'FAILED') {
         const failure = String(status.errorMessage || '');
         const failureCode = failure.match(/\b([45]\d{2}) [A-Z_]+\b/)?.[1];
-        const failureType = failure.includes('document screening results that failed validation')
-          ? 'screening output failed validation'
+        const validationFailure = failure.match(/failed validation: invalid ([a-z ]+)/i)?.[1];
+        const failureType = validationFailure
+          ? `screening output failed validation (${validationFailure.trim()})`
           : failureCode
             ? `screening returned HTTP ${failureCode}`
             : 'provider error details are omitted';
