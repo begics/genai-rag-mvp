@@ -76,20 +76,34 @@ public class RagService {
         store.save(workspaceId, source, chunks, vectors, embeddings.modelId(), documentId), chunks.size());
   }
   public ApiModels.QueryResponse query(ApiModels.QueryRequest request, UUID workspaceId) {
-    return query(request, workspaceId, null);
+    return query(request, workspaceId, new DocumentStore.DocumentFilter(request.source(), request.documentType()));
   }
 
   public ApiModels.QueryResponse query(
       ApiModels.QueryRequest request, UUID workspaceId, DocumentStore.DocumentFilter filter) {
-    List<RetrievedChunk> candidates = filter == null
-        || ((filter.source() == null || filter.source().isBlank())
-            && (filter.documentType() == null || filter.documentType().isBlank()))
-        ? store.search(workspaceId, request.question(), embeddings.embed(request.question()),
-            embeddings.modelId(), CANDIDATE_RESULTS)
-        : store.search(workspaceId, request.question(), embeddings.embed(request.question()),
-            embeddings.modelId(), CANDIDATE_RESULTS, filter);
+    return queryWithSearchQueries(request.question(), List.of(request.question()), workspaceId,
+        filter, request.assistantMode());
+  }
+
+  public ApiModels.QueryResponse queryWithSearchQueries(
+      String question, List<String> searchQueries, UUID workspaceId,
+      DocumentStore.DocumentFilter filter, String assistantMode) {
+    String assistantInstruction = assistantInstruction(assistantMode);
+    java.util.LinkedHashMap<String, RetrievedChunk> uniqueCandidates = new java.util.LinkedHashMap<>();
+    for (String searchQuery : searchQueries) {
+      List<RetrievedChunk> results = filter == null
+          || ((filter.source() == null || filter.source().isBlank())
+              && (filter.documentType() == null || filter.documentType().isBlank()))
+          ? store.search(workspaceId, searchQuery, embeddings.embed(searchQuery),
+              embeddings.modelId(), CANDIDATE_RESULTS)
+          : store.search(workspaceId, searchQuery, embeddings.embed(searchQuery),
+              embeddings.modelId(), CANDIDATE_RESULTS, filter);
+      for (RetrievedChunk result : results) {
+        uniqueCandidates.putIfAbsent(result.documentId() + ":" + result.chunk(), result);
+      }
+    }
     List<RetrievedChunk> matches =
-        reranker.rerank(request.question(), candidates, MAX_RESULTS);
+        reranker.rerank(question, List.copyOf(uniqueCandidates.values()), MAX_RESULTS);
     if (matches.isEmpty()) {
       return new ApiModels.QueryResponse("I could not find an answer in the indexed sources.", List.of());
     }
@@ -98,7 +112,23 @@ public class RagService {
         .map(match -> new ApiModels.SourceReference(
             match.documentId(), displayFilename(match.source()), match.chunk(), match.content()))
         .toList();
-    return new ApiModels.QueryResponse(chat.answer(request.question(), context), sources);
+    return new ApiModels.QueryResponse(
+        chat.answer(assistantInstruction + question, context), sources);
+  }
+
+  private static String assistantInstruction(String mode) {
+    if (mode == null || mode.isBlank() || mode.equalsIgnoreCase("general")) {
+      return "";
+    }
+    return switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+      case "support" -> "Answer as a product support assistant. Give concise troubleshooting steps and state "
+          + "when the indexed sources do not establish a solution. Question: ";
+      case "procedure" -> "Answer as a procedure assistant. Present supported steps in order, preserve warnings, "
+          + "and do not invent missing steps. Question: ";
+      case "summary" -> "Summarize only the retrieved source passages as concise key points and mention important "
+          + "qualifications. Question: ";
+      default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported assistant mode");
+    };
   }
 
   private static String displayFilename(String source) {

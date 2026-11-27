@@ -133,6 +133,27 @@ class DocumentUploadServiceTest {
   }
 
   @Test
+  void preservesSafeDirectoryRelativePathsWithoutTheSelectedRootDirectory() {
+    var file = new MockMultipartFile("file", "invoice.pdf", "application/pdf",
+        "%PDF-1.7 content".getBytes(StandardCharsets.UTF_8));
+    var uploaded = service.upload(file, java.util.UUID.randomUUID(), "owner", "Accounts/2026/May/invoice.pdf");
+
+    assertThat(uploaded.key()).endsWith("/2026/May/invoice.pdf");
+    verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
+  }
+
+  @Test
+  void rejectsTraversalInDirectoryRelativePaths() {
+    var file = new MockMultipartFile("file", "invoice.pdf", "application/pdf",
+        "%PDF-1.7 content".getBytes(StandardCharsets.UTF_8));
+
+    assertThatThrownBy(() -> service.upload(file, java.util.UUID.randomUUID(), "owner", "root/../invoice.pdf"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("Invalid directory-relative file path");
+    verifyNoInteractions(objectWriter);
+  }
+
+  @Test
   void rejectsFilesWhoseContentDoesNotMatchTheirExtension() {
     MockMultipartFile executable = new MockMultipartFile(
         "file", "notes.pdf", "application/pdf", "not a pdf".getBytes(StandardCharsets.UTF_8));

@@ -3,7 +3,6 @@ package com.begics.rag.api;
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.service.IndexingJobService;
 import com.begics.rag.service.InvoiceExtractionService;
-import com.begics.rag.store.DocumentStore;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import jakarta.validation.Valid;
@@ -81,8 +80,7 @@ public class RagController {
   public ApiModels.QueryResponse query(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.QueryRequest request) {
-    return service.query(request, workspaces.resolve(authentication, workspace),
-        new DocumentStore.DocumentFilter(request.source(), request.documentType()));
+    return service.query(request, workspaces.resolve(authentication, workspace));
   }
 
   @PostMapping("/documents/extract-invoice")

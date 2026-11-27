@@ -23,7 +23,10 @@ public class PipelineInfoService {
           "Cohere-compatible Rerank API",
           environment.getProperty("rag.infomaniak.rerank-model", "Not configured"),
           "OpenAI-compatible Chat Completions API",
-          environment.getProperty("rag.infomaniak.chat-model", "Not configured"));
+          environment.getProperty("rag.infomaniak.chat-model", "Not configured"),
+          "Infomaniak structured-output planner · configured, not live health-checked",
+          "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
+          3);
     }
     return new PipelineInfoResponse(
         "Offline demo mode",
@@ -33,6 +36,9 @@ public class PipelineInfoService {
         "No external reranker call",
         "pass-through",
         "No external chat LLM call",
-        "canned demo response");
+        "canned demo response",
+        "Deterministic local single-query planner · no provider calls",
+        "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
+        3);
   }
 }

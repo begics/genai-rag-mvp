@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,5 +33,11 @@ public class FeedbackController {
       @Valid @RequestBody ApiModels.AnswerFeedbackRequest request) {
     UUID workspaceId = workspaces.resolve(authentication, workspace);
     feedback.save(request, workspaceId, authentication.getName());
+  }
+
+  @GetMapping("/feedback/summary")
+  public ApiModels.AnswerFeedbackSummaryResponse summary(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace) {
+    return feedback.summary(workspaces.resolve(authentication, workspace));
   }
 }

@@ -116,6 +116,20 @@ class JdbcDocumentStoreIntegrationTest {
   }
 
   @Test
+  void resolvesDocumentSourceOnlyInsideItsWorkspace() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    jdbc().update("insert into workspaces(id, name) values (?, ?)", firstWorkspace, "First");
+    jdbc().update("insert into workspaces(id, name) values (?, ?)", secondWorkspace, "Second");
+    String id = store.save(firstWorkspace, "uploads/" + firstWorkspace + "/notes.txt",
+        List.of("content"), List.of(vector(1, 0)), "test-model", null);
+
+    assertThat(store.sourceChunk(firstWorkspace, UUID.fromString(id), 0))
+        .contains(new DocumentStore.SourceChunk("uploads/" + firstWorkspace + "/notes.txt", "content"));
+    assertThat(store.sourceChunk(secondWorkspace, UUID.fromString(id), 0)).isEmpty();
+  }
+
+  @Test
   void persistsIndexingJobStagesAndRecentWorkspaceStatus() {
     UUID workspaceId = UUID.randomUUID();
     jdbc().update("insert into workspaces(id, name) values (?, ?)", workspaceId, "Jobs");

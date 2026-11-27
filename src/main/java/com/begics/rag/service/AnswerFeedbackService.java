@@ -30,4 +30,20 @@ public class AnswerFeedbackService {
         """, workspaceId, subject, request.question(), request.answer(), request.helpful(),
         request.comment(), sourceIds);
   }
+
+  public ApiModels.AnswerFeedbackSummaryResponse summary(UUID workspaceId) {
+    return jdbc.queryForObject("""
+        select count(*) as total_responses,
+               count(*) filter (where helpful) as helpful_responses,
+               count(*) filter (where not helpful) as unhelpful_responses,
+               coalesce(round(100.0 * count(*) filter (where helpful)
+                   / nullif(count(*), 0), 1), 0) as helpful_rate_percent
+          from answer_feedback
+         where workspace_id = ?
+        """, (rs, row) -> new ApiModels.AnswerFeedbackSummaryResponse(
+        rs.getLong("total_responses"),
+        rs.getLong("helpful_responses"),
+        rs.getLong("unhelpful_responses"),
+        rs.getDouble("helpful_rate_percent")), workspaceId);
+  }
 }

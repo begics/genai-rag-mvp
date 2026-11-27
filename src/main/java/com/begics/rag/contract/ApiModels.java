@@ -20,9 +20,13 @@ public final class ApiModels {
                                boolean indexable) {}
   public record QueryRequest(@NotBlank @Size(max = 10_000) String question,
                              @Size(max = 500) String source,
-                             @Size(max = 20) String documentType) {
+                             @Size(max = 20) String documentType,
+                             @Size(max = 20) String assistantMode) {
     public QueryRequest(String question) {
-      this(question, null, null);
+      this(question, null, null, null);
+    }
+    public QueryRequest(String question, String source, String documentType) {
+      this(question, source, documentType, null);
     }
   }
   public record SourceReference(String documentId, String source, int chunk, String excerpt) {
@@ -31,12 +35,41 @@ public final class ApiModels {
     }
   }
   public record QueryResponse(String answer, List<SourceReference> sources) {}
+  public record AgentQueryRequest(
+      @NotBlank @Size(max = 10_000) String question,
+      @Size(max = 500) String source,
+      @Size(max = 20) String documentType,
+      @Size(max = 20) String assistantMode) {}
+  public record AgentStepResponse(
+      String tool, String status, String title, String detail, long durationMillis) {}
+  public record AgentQueryResponse(
+      String answer, List<SourceReference> sources, List<AgentStepResponse> steps,
+      DocumentCompareResponse comparison, int maxSteps) {}
+  public record DocumentContentResponse(String documentId, String filename, String text, int matchOffset) {}
+  public record DocumentCompareRequest(
+      @NotBlank @Size(max = 500) String firstKey,
+      @NotBlank @Size(max = 500) String secondKey) {}
+  public record DocumentCompareResponse(
+      String firstFilename, String secondFilename, List<String> removedParagraphs,
+      List<String> addedParagraphs) {}
+  public record InvoiceValidationIssue(String field, String message) {}
+  public record InvoiceValidationResponse(List<InvoiceValidationIssue> issues) {}
+  public record InvoiceCheckRequest(
+      @NotBlank @Size(max = 500) String key,
+      @Size(max = 500) String supplier,
+      @Size(max = 200) String invoiceNumber,
+      LocalDate invoiceDate,
+      LocalDate dueDate,
+      String currency,
+      @jakarta.validation.constraints.DecimalMin("0.0") BigDecimal total) {}
   public record AnswerFeedbackRequest(
       @NotBlank @Size(max = 10_000) String question,
       @NotBlank @Size(max = 50_000) String answer,
       boolean helpful,
       @Size(max = 2_000) String comment,
-      List<@Size(max = 500) String> sourceIds) {}
+      @Size(max = 50) List<@Size(max = 500) String> sourceIds) {}
+  public record AnswerFeedbackSummaryResponse(
+      long totalResponses, long helpfulResponses, long unhelpfulResponses, double helpfulRatePercent) {}
   public record InvoiceExtractionRequest(@NotBlank @Size(max = 500) String key) {}
   public record InvoiceField<T>(T value, String evidence) {}
   public record InvoiceExtractionResponse(
@@ -45,12 +78,24 @@ public final class ApiModels {
       InvoiceField<LocalDate> invoiceDate,
       InvoiceField<LocalDate> dueDate,
       InvoiceField<String> currency,
-      InvoiceField<BigDecimal> total) {}
+      InvoiceField<BigDecimal> total,
+      List<InvoiceValidationIssue> validationIssues) {
+    public InvoiceExtractionResponse(
+        InvoiceField<String> supplier,
+        InvoiceField<String> invoiceNumber,
+        InvoiceField<LocalDate> invoiceDate,
+        InvoiceField<LocalDate> dueDate,
+        InvoiceField<String> currency,
+        InvoiceField<BigDecimal> total) {
+      this(supplier, invoiceNumber, invoiceDate, dueDate, currency, total, List.of());
+    }
+  }
   public record WorkspaceRequest(@NotBlank @Size(max = 120) String name) {}
   public record IndexedDocumentResponse(String id, String source, int chunks) {}
   public record PipelineInfoResponse(
       String provider, String embeddingService, String embeddingModel, int embeddingDimensions,
-      String rerankService, String rerankModel, String chatService, String chatModel) {}
+      String rerankService, String rerankModel, String chatService, String chatModel,
+      String agentPlanner, String agentTools, int maxAgentSearches) {}
   public record StorageFileResponse(
       String key, String filename, long sizeBytes, boolean indexed, boolean indexable, int chunks,
       long indexedBytes) {}

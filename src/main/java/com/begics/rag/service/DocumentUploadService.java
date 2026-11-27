@@ -11,6 +11,8 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,12 @@ public class DocumentUploadService {
 
   @Transactional
   public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId, String subject) {
+    return upload(file, workspaceId, subject, null);
+  }
+
+  @Transactional
+  public ApiModels.UploadResponse upload(
+      MultipartFile file, UUID workspaceId, String subject, String relativePath) {
     if (file.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a non-empty file to upload");
     }
@@ -73,10 +81,40 @@ public class DocumentUploadService {
     validateContent(file, extension);
     storageQuota.checkS3Upload(subject, workspaceId, file.getSize());
 
-    String key = "uploads/" + workspaceId + "/" + UUID.randomUUID() + "/" + filename;
+    String objectPath = objectPath(relativePath, filename);
+    String key = "uploads/" + workspaceId + "/" + UUID.randomUUID() + "/" + objectPath;
     objectWriter.write(key, fileType.contentType(), file);
     return new ApiModels.UploadResponse(key, filename, fileType.contentType(), file.getSize(),
         fileType.indexable() || (fileType.transcribable() && transcription.available()));
+  }
+
+  private static String objectPath(String relativePath, String filename) {
+    if (relativePath == null || relativePath.isBlank()) {
+      return filename;
+    }
+    String normalized = relativePath.replace('\\', '/');
+    if (normalized.startsWith("/") || normalized.length() > 2_000
+        || normalized.chars().anyMatch(Character::isISOControl)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid directory-relative file path");
+    }
+    List<String> segments = new ArrayList<>();
+    for (String segment : normalized.split("/", -1)) {
+      if (segment.isBlank() || segment.equals(".") || segment.equals("..")) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid directory-relative file path");
+      }
+      String safeSegment = segment.replaceAll("[^A-Za-z0-9._ -]", "_")
+          .replaceAll("^[. ]+|[. ]+$", "");
+      if (safeSegment.isBlank()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid directory-relative file path");
+      }
+      segments.add(safeSegment);
+    }
+    if (!segments.getLast().equals(filename)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Relative path filename does not match upload");
+    }
+    return segments.size() > 1
+        ? String.join("/", segments.subList(1, segments.size()))
+        : filename;
   }
 
   public ApiModels.UploadResponse upload(MultipartFile file, UUID workspaceId) {

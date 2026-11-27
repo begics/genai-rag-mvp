@@ -30,6 +30,7 @@
       outline: 3px solid #9db5ff;
       outline-offset: 2px;
     }
+
     .topbar {
       height: 72px;
       display: flex;
@@ -105,6 +106,17 @@
     .feedback-button { padding: 5px 8px; border: 1px solid #dfe5ef; border-radius: 7px; color: #526174; background: #fff; font-size: .72rem; }
     .feedback-button.selected { border-color: #9bb0ff; color: var(--blue-dark); background: #eff3ff; }
     .feedback-comment { width: min(420px, 100%); padding: 7px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; font-size: .75rem; }
+    .feedback-summary { margin: 4px 0 12px; color: #64748b; font-size: .68rem; }
+    .agent-toggle { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; border: 1px solid #dce5f5; border-radius: 9px; color: #354359; background: #f7f9ff; font-size: .74rem; line-height: 1.45; }
+    .agent-toggle input { margin-top: 2px; accent-color: var(--blue); }
+    .agent-toggle strong { display: block; color: #283b66; }
+    .agent-trace { margin: 10px 0 2px; padding: 10px 12px; border: 1px solid #dce5f5; border-radius: 9px; background: #f8faff; font-size: .72rem; }
+    .agent-trace summary { color: #354359; font-weight: 700; cursor: pointer; }
+    .agent-trace ol { display: grid; gap: 8px; margin: 10px 0; padding-left: 22px; }
+    .agent-trace li { padding-left: 2px; color: #526174; line-height: 1.45; }
+    .agent-trace li strong { color: #283b66; }
+    .agent-trace small { color: #8290a2; }
+    .agent-comparison { margin: 8px 0; }
     .ask { display: flex; align-items: flex-end; gap: 10px; padding: 8px 8px 8px 15px; border: 1px solid #dfe5ef; border-radius: 13px; background: #fff; box-shadow: 0 3px 12px #253c5c08; }
     .ask:focus-within { border-color: #9bb0ff; box-shadow: 0 0 0 3px #eaf0ff; }
     .ask textarea { flex: 1; min-width: 0; max-height: 150px; resize: vertical; border: 0; outline: 0; padding: 7px 0; color: var(--ink); background: transparent; line-height: 1.5; }
@@ -191,6 +203,17 @@
     .invoice-fields strong { color: #526174; font-size: .65rem; }
     .invoice-fields span { margin-top: 3px; color: #253247; font-size: .72rem; }
     .invoice-fields small { margin-top: 4px; color: #7b8797; font-size: .63rem; line-height: 1.4; }
+    .source-open { margin-top: 8px; padding: 5px 8px; border: 1px solid #dfe5ef; border-radius: 6px; color: #40516a; background: #fff; font: inherit; font-size: .68rem; cursor: pointer; }
+    .source-context { max-height: 240px; overflow: auto; margin: 8px 0 0; padding: 9px; border-radius: 6px; color: #334155; background: #f3f5f8; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .68rem; }
+    .source-match { color: #111827; background: #ffe58a; }
+    .compare-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; margin: 8px 0; }
+    .compare-controls select, .compare-controls button { min-width: 0; padding: 7px; border: 1px solid #dfe5ef; border-radius: 7px; background: #fff; color: #354359; font: inherit; font-size: .66rem; }
+    .compare-controls button { cursor: pointer; }
+    .compare-results { margin: 8px 0; padding: 10px; border: 1px solid #e2e7ef; border-radius: 8px; background: #fbfcfe; font-size: .7rem; }
+    .compare-results li { margin: 4px 0; overflow-wrap: anywhere; }
+    .folder-button { margin-left: 6px; padding: 8px 11px; border: 1px solid #d8deea; border-radius: 8px; color: #40516a; background: #fff; font: inherit; font-size: .72rem; cursor: pointer; }
+    .folder-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+    .invoice-validation { margin: 8px 10px 10px; padding-left: 18px; color: #8a4b08; font-size: .68rem; }
     .job-list { margin: 8px 0 0; padding: 0; list-style: none; }
     .job-row { padding: 9px 0; border-top: 1px solid #edf0f5; }
     .job-row:first-child { border-top: 0; }
@@ -300,9 +323,9 @@
     <div class="page-heading">
       <div class="eyebrow">Knowledge assistant</div>
       <h1>Ask your documents.</h1>
-      <p>Ask a standalone question and the assistant searches passages in your indexed files. Inspect the returned source excerpts yourself; retrieved passages may not always support the generated answer.</p>
+      <p>Ask a question and the read-only agent plans focused searches across your indexed files. Inspect its tool trace and source excerpts; retrieved passages may not always support the generated answer.</p>
     </div>
-    <details class="pipeline-disclosure">
+    <details class="pipeline-disclosure" open>
       <summary>How the system works <span class="pipeline-summary-status" id="pipeline-summary-status">Sign in to see indexing activity.</span></summary>
     <section class="pipeline-panel" aria-labelledby="pipeline-title">
       <div class="pipeline-header">
@@ -335,6 +358,18 @@
           <li class="pipeline-step"><strong>Browser</strong>Answer + sources</li>
         </ol>
       </div>
+      <div class="pipeline-lane">
+        <h3 class="pipeline-lane-title">3 · Agentic orchestration · read-only tools</h3>
+        <p class="pipeline-status" id="agent-status" role="status" aria-live="polite">Sign in to run the configured planner and read-only tools. Component configuration is shown below; provider availability is not live-checked.</p>
+        <ol class="pipeline-steps" aria-label="Agentic question workflow">
+          <li class="pipeline-step"><strong>Agent planner</strong>Builds a bounded plan from the question and this workspace's indexed file list</li>
+          <li class="pipeline-step"><strong>Search tool</strong>Runs up to 3 planned hybrid searches with current workspace filters</li>
+          <li class="pipeline-step"><strong>Compare tool</strong>Optional exact paragraph comparison for two listed text/PDF documents</li>
+          <li class="pipeline-step"><strong>Evidence merge</strong>Deduplicates passages and reranks them against the original question</li>
+          <li class="pipeline-step"><strong>Answer model</strong>Answers from evidence, or abstains when retrieval is empty</li>
+          <li class="pipeline-step"><strong>Trace</strong>Shows plan, tool outcomes, duration, and sources with the answer</li>
+        </ol>
+      </div>
       <div class="pipeline-components" aria-label="Configured AI components">
         <span class="pipeline-component"><strong>Provider:</strong> <span data-pipeline-model="provider">Loading…</span></span>
         <span class="pipeline-component"><strong>Login:</strong> Keycloak · OIDC</span>
@@ -343,8 +378,13 @@
         <span class="pipeline-component"><strong>Chunking:</strong> 1,500 characters · 200 overlap</span>
         <span class="pipeline-component"><strong>Object storage:</strong> RustFS · S3 API</span>
         <span class="pipeline-component"><strong>Queue &amp; vector DB:</strong> PostgreSQL · pgvector</span>
+        <span class="pipeline-component"><strong>Agent planner:</strong> <span data-pipeline-model="agent-planner">Loading…</span></span>
+        <span class="pipeline-component"><strong>Agent tools:</strong> <span data-pipeline-model="agent-tools">Loading…</span></span>
+        <span class="pipeline-component"><strong>Agent guardrails:</strong> read-only · max <span data-pipeline-model="agent-search-limit">3</span> searches · listed document IDs only</span>
+        <span class="pipeline-component"><strong>Agent runtime:</strong> configured only · provider availability is not live-checked</span>
       </div>
-      <p class="pipeline-note"><strong>Structured extraction is a different task from RAG.</strong> Extraction models can return typed fields, compute values from supplied facts, or estimate and forecast outcomes. This application currently extracts document text, retrieves passages, and generates answers; it does not use Cloudflare Workers AI extraction models. Typed output and constraints do not guarantee correctness, so validate important values against source evidence and use human review for consequential decisions. <a href="https://developers.cloudflare.com/workers-ai/concepts/extraction-models/" target="_blank" rel="noopener noreferrer">Learn about extraction models</a>.</p>
+      <p class="pipeline-note"><strong>What the agent does:</strong> For each question it plans focused searches, can compare two indexed documents when requested, combines evidence, then answers with citations. It cannot change or delete files, run arbitrary SQL, or call invoice extraction. Comparison is an exact paragraph diff, not semantic analysis. In offline mode, planning is deterministic rather than model-driven. Tool steps and sources appear under each agent answer.</p>
+      <p class="pipeline-note"><strong>Structured extraction is a different task from RAG.</strong> Invoice extraction returns typed fields with quotations and deterministic plausibility warnings. It does not reconcile tax or line items; review consequential results.</p>
       <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
     </section>
     </details>
@@ -384,6 +424,21 @@
               <option value="media">Audio/video</option>
             </select>
           </div>
+          <div class="retrieval-filters">
+            <label class="agent-toggle" for="agentic-enabled">
+              <input id="agentic-enabled" type="checkbox" checked>
+              <span><strong>Agentic research · enabled</strong>Plans focused searches, may compare two workspace documents, and shows its tool trace. Read-only; up to 3 searches per question.</span>
+            </label>
+          </div>
+          <div class="retrieval-filters">
+            <label class="sr-only" for="assistant-mode">Answer style</label>
+            <select id="assistant-mode" aria-label="Answer style">
+              <option value="general">General</option>
+              <option value="support">Troubleshooting support</option>
+              <option value="procedure">Step-by-step procedure</option>
+              <option value="summary">Concise summary</option>
+            </select>
+          </div>
           <form class="ask" id="ask-form">
             <textarea id="question" name="question" rows="2" maxlength="10000" placeholder="Ask a standalone question about your files..." aria-label="Your question" required></textarea>
             <button class="send-button" id="ask-button" type="submit" aria-label="Send message" title="Send message">
@@ -407,13 +462,17 @@
           <button class="workspace-create" id="workspace-create" type="button" disabled>New</button>
         </div>
         <p class="side-copy">Add files to your private library, then index supported text, PDFs or audio/video to make them searchable.</p>
+        <p class="feedback-summary" id="feedback-summary" role="status">Answer feedback · loading…</p>
         <div class="drop-zone" id="drop-zone">
           <div class="upload-symbol" aria-hidden="true">↥</div>
           <p class="drop-copy"><strong>Drop files here</strong><br>or choose from your device</p>
           <input class="file-input" id="file-input" type="file" multiple
                  accept=".txt,.md,.csv,.pdf,.mp4,.webm,.mp3,.wav,.m4a,.aac,.ogg,.opus,.wma,.flac"
                  aria-label="Choose files to upload">
+          <input class="folder-input" id="folder-input" type="file" webkitdirectory directory multiple
+                 aria-label="Choose a directory to upload">
           <button class="upload-button" id="upload-button" type="button" disabled>Choose files to upload</button>
+          <button class="folder-button" id="folder-button" type="button" disabled>Choose folder</button>
           <p class="upload-limit">Each file can be up to 20 MiB. Supported formats: text, Markdown, CSV, text-based PDF, and supported Whisper media. Storage and indexed data each have a 1 GB limit.</p>
         </div>
         <section class="storage-usage" aria-label="Storage usage">
@@ -429,6 +488,13 @@
         </section>
         <ul class="file-list" id="file-list" aria-live="polite"></ul>
         <h3 class="indexed-heading">Your stored files</h3>
+        <div class="compare-controls" aria-label="Compare two stored documents">
+          <select id="compare-first" aria-label="First document"><option value="">First document…</option></select>
+          <select id="compare-second" aria-label="Second document"><option value="">Second document…</option></select>
+          <button id="compare-button" type="button" disabled>Compare</button>
+        </div>
+        <p class="privacy-note">Exact added/removed paragraphs · 100,000 extracted characters maximum per file.</p>
+        <div id="compare-results" aria-live="polite"></div>
         <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
         <div class="privacy-note"><strong>Private workspace.</strong> Supported audio/video files are sent to Infomaniak AI for Whisper transcription only when you choose “Index for chat”; the resulting transcript is stored in your private index.</div>
       </aside>
@@ -436,6 +502,8 @@
   </main>
   <script>
     const fileInput = document.getElementById("file-input");
+    const folderInput = document.getElementById("folder-input");
+    const folderButton = document.getElementById("folder-button");
     const uploadButton = document.getElementById("upload-button");
     const fileList = document.getElementById("file-list");
     const indexedFileList = document.getElementById("indexed-file-list");
@@ -447,6 +515,7 @@
     const indexingJobList = document.getElementById("indexing-job-list");
     const pipelineStatus = document.getElementById("pipeline-status");
     const pipelineSummaryStatus = document.getElementById("pipeline-summary-status");
+    const agentStatus = document.getElementById("agent-status");
     const pipelinePanel = document.querySelector(".pipeline-panel");
     const pipelineSteps = Array.from(document.querySelectorAll("[data-pipeline-node]"));
     const pipelineModels = {
@@ -457,7 +526,10 @@
       rerankService: document.querySelector('[data-pipeline-service="rerank"]'),
       rerank: document.querySelector('[data-pipeline-model="rerank"]'),
       chatService: document.querySelector('[data-pipeline-service="chat"]'),
-      chat: document.querySelector('[data-pipeline-model="chat"]')
+      chat: document.querySelector('[data-pipeline-model="chat"]'),
+      agentPlanner: document.querySelector('[data-pipeline-model="agent-planner"]'),
+      agentTools: document.querySelector('[data-pipeline-model="agent-tools"]'),
+      agentSearchLimit: document.querySelector('[data-pipeline-model="agent-search-limit"]')
     };
     const dropZone = document.getElementById("drop-zone");
     const chatLog = document.getElementById("chat-log");
@@ -474,6 +546,7 @@
     let csrfToken;
     let indexingRefreshTimer;
     let currentStorage;
+    let selectedFiles = [];
     let currentJobs = [];
 
     const stageLabels = {
@@ -493,6 +566,7 @@
       document.querySelectorAll("button, input, textarea, select").forEach(control => {
         control.disabled = !authenticated;
       });
+
       if (authenticated) {
         workspaceSelect.disabled = true;
         updateFileSelection();
@@ -522,7 +596,7 @@
       return payload;
     }
 
-    function addMessage(text, kind, sources, question) {
+    function addMessage(text, kind, sources, question, agentResult) {
       document.getElementById("empty-state")?.remove();
       const message = document.createElement("article");
       message.className = `message ${kind}`;
@@ -533,6 +607,36 @@
       body.className = "message-body";
       body.textContent = text;
       message.append(meta, body);
+      if (agentResult) {
+        const trace = document.createElement("details");
+        trace.className = "agent-trace";
+        trace.open = true;
+        const summary = document.createElement("summary");
+        const completed = agentResult.steps.filter(step => step.status === "completed").length;
+        summary.textContent = `Agent run · ${completed} completed step${completed === 1 ? "" : "s"} · maximum ${agentResult.maxSteps}`;
+        const steps = document.createElement("ol");
+        for (const step of agentResult.steps) {
+          const item = document.createElement("li");
+          const title = document.createElement("strong");
+          title.textContent = `${step.title} · ${step.status}`;
+          const detail = document.createElement("div");
+          detail.textContent = step.detail;
+          item.append(title, detail);
+          if (step.durationMillis > 0) {
+            const duration = document.createElement("small");
+            duration.textContent = `${step.durationMillis} ms`;
+            item.append(duration);
+          }
+          steps.append(item);
+        }
+        trace.append(summary, steps);
+        if (agentResult.comparison) {
+          const diff = renderComparison(agentResult.comparison);
+          diff.classList.add("agent-comparison");
+          trace.append(diff);
+        }
+        message.append(trace);
+      }
       if (sources && sources.length) {
         const list = document.createElement("ul");
         list.className = "sources";
@@ -546,6 +650,37 @@
           excerpt.className = "source-excerpt";
           excerpt.textContent = source.excerpt;
           disclosure.append(summary, excerpt);
+          const openSource = document.createElement("button");
+          openSource.type = "button";
+          openSource.className = "source-open";
+          openSource.textContent = "Open indexed source context";
+          openSource.addEventListener("click", async () => {
+            openSource.disabled = true;
+            try {
+              const context = await responseJson(await apiFetch(
+                `/api/documents/${encodeURIComponent(source.documentId)}/content?${new URLSearchParams({ chunk: source.chunk, excerpt: source.excerpt })}`));
+              const preview = document.createElement("pre");
+              preview.className = "source-context";
+              const offset = context.matchOffset;
+              if (offset >= 0 && source.excerpt) {
+                preview.append(document.createTextNode(context.text.slice(0, offset)));
+                const match = document.createElement("mark");
+                match.className = "source-match";
+                match.textContent = context.text.slice(offset, offset + source.excerpt.length);
+                preview.append(match, document.createTextNode(context.text.slice(offset + source.excerpt.length)));
+              } else {
+                preview.textContent = context.text;
+              }
+              disclosure.querySelector(".source-context")?.remove();
+              disclosure.append(preview);
+              openSource.textContent = `${context.filename} · extracted text`;
+            } catch (error) {
+              openSource.textContent = error.message;
+            } finally {
+              openSource.disabled = false;
+            }
+          });
+          disclosure.append(openSource);
           item.append(disclosure);
           list.append(item);
         }
@@ -586,6 +721,7 @@
               helpful.classList.toggle("selected", isHelpful);
               unhelpful.classList.toggle("selected", !isHelpful);
               comment.disabled = true;
+              await loadFeedbackSummary();
             } catch (error) {
               button.disabled = false;
               chatStatus.textContent = error.message;
@@ -617,7 +753,7 @@
     }
 
     function updateFileSelection() {
-      const files = Array.from(fileInput.files || []);
+      const files = selectedFiles;
       const selectedBytes = files.reduce((total, file) => total + file.size, 0);
       const exceedsQuota = currentStorage && currentStorage.s3UsedBytes + selectedBytes > currentStorage.s3LimitBytes;
       uploadButton.disabled = !isAuthenticated || files.length === 0 || exceedsQuota;
@@ -631,6 +767,8 @@
         storageMessage.textContent = "Each limit is 1 GB across all your workspaces.";
         storageMessage.classList.remove("error");
       }
+      folderButton.disabled = !isAuthenticated || exceedsQuota;
+      folderButton.title = exceedsQuota ? "Selected files exceed the remaining storage quota" : "Upload a directory";
     }
 
     function formatBytes(bytes) {
@@ -674,11 +812,22 @@
         fields.append(item);
       }
       details.append(summary, fields);
+      if (result.validationIssues?.length) {
+        const issues = document.createElement("ul");
+        issues.className = "invoice-validation";
+        for (const issue of result.validationIssues) {
+          const item = document.createElement("li");
+          item.textContent = `${issue.field}: ${issue.message}`;
+          issues.append(item);
+        }
+        details.append(issues);
+      }
       return details;
     }
 
     function renderStorage(storage) {
       currentStorage = storage;
+      updateCompareOptions(storage.files);
       s3UsageLabel.textContent = `${formatBytes(storage.s3UsedBytes)} / 1 GB`;
       s3UsageBar.value = storage.s3UsedBytes;
       indexUsageLabel.textContent = `${formatBytes(storage.indexUsedBytes)} / 1 GB`;
@@ -798,6 +947,52 @@
       updateFileSelection();
     }
 
+    function updateCompareOptions(files) {
+      const firstSelect = document.getElementById("compare-first");
+      const secondSelect = document.getElementById("compare-second");
+      for (const [select, label] of [[firstSelect, "First document…"], [secondSelect, "Second document…"]]) {
+        const selected = select.value;
+        select.replaceChildren(new Option(label, ""));
+        for (const file of files.filter(item =>
+          item.indexable && item.sizeBytes <= maxIndexFileBytes && /\.(txt|md|csv|pdf)$/i.test(item.filename))) {
+          select.add(new Option(file.filename, file.key));
+        }
+        if (Array.from(select.options).some(option => option.value === selected)) select.value = selected;
+      }
+      document.getElementById("compare-button").disabled =
+        !isAuthenticated || files.filter(item =>
+          item.indexable && item.sizeBytes <= maxIndexFileBytes && /\.(txt|md|csv|pdf)$/i.test(item.filename)).length < 2;
+    }
+
+    function renderComparison(comparison) {
+      const panel = document.createElement("section");
+      panel.className = "compare-results";
+      const heading = document.createElement("strong");
+      heading.textContent = `${comparison.firstFilename} → ${comparison.secondFilename}`;
+      panel.append(heading);
+      for (const [label, entries] of [
+        ["Only in first document", comparison.removedParagraphs],
+        ["Only in second document", comparison.addedParagraphs]
+      ]) {
+        const title = document.createElement("p");
+        title.textContent = label;
+        panel.append(title);
+        const list = document.createElement("ul");
+        for (const text of entries) {
+          const item = document.createElement("li");
+          item.textContent = text;
+          list.append(item);
+        }
+        if (!entries.length) {
+          const item = document.createElement("li");
+          item.textContent = "No differences";
+          list.append(item);
+        }
+        panel.append(list);
+      }
+      return panel;
+    }
+
     function addFileRow(file) {
       const row = document.createElement("li");
       row.className = "file-row";
@@ -817,6 +1012,7 @@
       try {
         const data = new FormData();
         data.append("file", file);
+        if (file.webkitRelativePath) data.append("relativePath", file.webkitRelativePath);
         const uploaded = await responseJson(await apiFetch("/api/uploads", { method: "POST", body: data }));
         status.textContent = `Stored in private storage · ${(uploaded.sizeBytes / 1024 / 1024).toFixed(2)} MiB`;
         await loadStorage();
@@ -835,9 +1031,19 @@
       }
     }
 
-    fileInput.addEventListener("change", updateFileSelection);
+    fileInput.addEventListener("change", () => {
+      selectedFiles = Array.from(fileInput.files || []);
+      folderInput.value = "";
+      updateFileSelection();
+    });
+    folderInput.addEventListener("change", () => {
+      selectedFiles = Array.from(folderInput.files || []);
+      fileInput.value = "";
+      updateFileSelection();
+    });
+    folderButton.addEventListener("click", () => folderInput.click());
     uploadButton.addEventListener("click", async () => {
-      const files = Array.from(fileInput.files || []);
+      const files = selectedFiles;
       if (!files.length) return;
       uploadButton.disabled = true;
       uploadButton.textContent = `Uploading 0 of ${files.length}...`;
@@ -846,6 +1052,8 @@
         await uploadFile(files[i]);
       }
       fileInput.value = "";
+      folderInput.value = "";
+      selectedFiles = [];
       updateFileSelection();
     });
 
@@ -865,6 +1073,7 @@
       if (!isAuthenticated) return;
       if (event.dataTransfer.files.length) {
         fileInput.files = event.dataTransfer.files;
+        selectedFiles = Array.from(event.dataTransfer.files);
         updateFileSelection();
       }
     });
@@ -916,6 +1125,7 @@
       fileList.replaceChildren();
       refreshIndexingJobs();
       loadStorage();
+      loadFeedbackSummary();
       chatLog.replaceChildren();
       document.getElementById("clear-chat").click();
     });
@@ -967,6 +1177,7 @@
       await loadStorage();
       await refreshIndexingJobs();
       await loadPipelineInfo();
+      await loadFeedbackSummary();
     }
 
     async function loadPipelineInfo() {
@@ -980,6 +1191,9 @@
         pipelineModels.rerank.textContent = info.rerankModel;
         pipelineModels.chatService.textContent = `${info.provider} · ${info.chatService}`;
         pipelineModels.chat.textContent = info.chatModel;
+        pipelineModels.agentPlanner.textContent = info.agentPlanner;
+        pipelineModels.agentTools.textContent = info.agentTools;
+        pipelineModels.agentSearchLimit.textContent = info.maxAgentSearches;
       } catch (error) {
         pipelineModels.provider.textContent = `Could not load: ${error.message}`;
       }
@@ -1102,6 +1316,16 @@
       }
     }
 
+    async function loadFeedbackSummary() {
+      const summary = document.getElementById("feedback-summary");
+      try {
+        const result = await responseJson(await apiFetch("/api/feedback/summary"));
+        summary.textContent = `Submitted ratings: ${result.totalResponses} · helpful ${result.helpfulResponses} (${result.helpfulRatePercent}%) · not helpful ${result.unhelpfulResponses}. This is user feedback, not a measure of answer accuracy.`;
+      } catch (error) {
+        summary.textContent = `Could not load feedback summary: ${error.message}`;
+      }
+    }
+
     async function loadAccount() {
       try {
         const account = await responseJson(await apiFetch("/api/me"));
@@ -1141,30 +1365,62 @@
       askButton.disabled = true;
       chatStatus.classList.remove("error");
       chatStatus.textContent = "Searching your knowledge...";
+      const agentic = document.getElementById("agentic-enabled").checked;
+      if (agentic) {
+        chatStatus.textContent = "Agent is planning workspace tools, searching evidence, and preparing an answer…";
+        agentStatus.textContent = "Agent run in progress · planner, workspace-scoped tools, evidence ranking, and answer generation.";
+      }
       const thinking = addThinkingIndicator();
       try {
         const sourceFilter = document.getElementById("source-filter").value.trim();
         const documentTypeFilter = document.getElementById("document-type-filter").value;
-        const result = await responseJson(await apiFetch("/api/query", {
+        const result = await responseJson(await apiFetch(agentic ? "/api/agent/query" : "/api/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             question,
             source: sourceFilter || null,
-            documentType: documentTypeFilter || null
+            documentType: documentTypeFilter || null,
+            assistantMode: document.getElementById("assistant-mode").value
           })
         }));
         thinking.remove();
-        addMessage(result.answer, "assistant", result.sources, question);
-        chatStatus.textContent = "";
+        addMessage(result.answer, "assistant", result.sources, question, agentic ? result : null);
+        chatStatus.textContent = agentic
+          ? `Agent completed ${result.steps.length} trace steps. Review the plan, tools, comparison, and source passages below.`
+          : "";
+        if (agentic) {
+          const completedSteps = result.steps.filter(step => step.status === "completed").length;
+          agentStatus.textContent = `Last run completed · ${completedSteps} completed steps out of at most ${result.maxSteps}. Expand the answer trace to inspect each tool and result.`;
+        }
       } catch (error) {
         thinking.remove();
         addMessage(error.message, "assistant error");
         chatStatus.textContent = "That question could not be answered. Please try again.";
         chatStatus.classList.add("error");
+        if (agentic) {
+          agentStatus.textContent = `Last run failed · ${error.message}`;
+        }
       } finally {
         askButton.disabled = false;
         questionInput.focus();
+      }
+    });
+    document.getElementById("compare-button").addEventListener("click", async () => {
+      const firstKey = document.getElementById("compare-first").value;
+      const secondKey = document.getElementById("compare-second").value;
+      const results = document.getElementById("compare-results");
+      if (!firstKey || !secondKey) return;
+      results.textContent = "Comparing extracted text…";
+      try {
+        const comparison = await responseJson(await apiFetch("/api/documents/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ firstKey, secondKey })
+        }));
+        results.replaceChildren(renderComparison(comparison));
+      } catch (error) {
+        results.textContent = error.message;
       }
     });
     loadAccount();

@@ -32,9 +32,12 @@ public class UploadController {
   @ResponseStatus(HttpStatus.CREATED)
   public ApiModels.UploadResponse upload(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
-      @RequestPart("file") @NotNull MultipartFile file) {
+      @RequestPart("file") @NotNull MultipartFile file,
+      @RequestParam(name = "relativePath", required = false) String relativePath) {
     UUID workspaceId = workspaces.resolve(authentication, workspace);
-    return uploadService.upload(file, workspaceId, authentication.getName());
+    return relativePath == null
+        ? uploadService.upload(file, workspaceId, authentication.getName())
+        : uploadService.upload(file, workspaceId, authentication.getName(), relativePath);
   }
 
   @DeleteMapping

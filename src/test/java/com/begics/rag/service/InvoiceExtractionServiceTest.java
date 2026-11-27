@@ -83,4 +83,24 @@ class InvoiceExtractionServiceTest {
 
     verifyNoInteractions(extractor);
   }
+
+  @Test
+  void returnsDeterministicWarningsForImplausibleInvoiceDatesAndIncompleteTotals() {
+    UUID workspaceId = UUID.randomUUID();
+    String key = "uploads/" + workspaceId + "/invoice.txt";
+    when(documents.read(key)).thenReturn("invoice");
+    when(extractor.extract("invoice")).thenReturn(new InvoiceExtraction(
+        new com.begics.rag.domain.InvoiceField<>("ACME", "ACME"),
+        new com.begics.rag.domain.InvoiceField<>("I-1", "I-1"),
+        new com.begics.rag.domain.InvoiceField<>(java.time.LocalDate.parse("2026-03-20"), "2026-03-20"),
+        new com.begics.rag.domain.InvoiceField<>(java.time.LocalDate.parse("2026-03-01"), "2026-03-01"),
+        new com.begics.rag.domain.InvoiceField<>(null, null),
+        new com.begics.rag.domain.InvoiceField<>(new java.math.BigDecimal("25.00"), "25.00")));
+
+    var result = service.extract(key, workspaceId);
+
+    assertThat(result.validationIssues())
+        .extracting(com.begics.rag.contract.ApiModels.InvoiceValidationIssue::field)
+        .containsExactly("dueDate", "total");
+  }
 }

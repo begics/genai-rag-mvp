@@ -4,6 +4,8 @@ import com.begics.rag.contract.ApiModels;
 import com.begics.rag.domain.InvoiceExtraction;
 import com.begics.rag.model.InvoiceExtractor;
 import com.begics.rag.storage.S3DocumentReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,7 +44,22 @@ public class InvoiceExtractionService {
         invoiceField(extraction.invoiceDate()),
         invoiceField(extraction.dueDate()),
         invoiceField(extraction.currency()),
-        invoiceField(extraction.total()));
+        invoiceField(extraction.total()),
+        validate(extraction));
+  }
+
+  private static List<ApiModels.InvoiceValidationIssue> validate(InvoiceExtraction extraction) {
+    List<ApiModels.InvoiceValidationIssue> issues = new ArrayList<>();
+    if (extraction.invoiceDate().value() != null && extraction.dueDate().value() != null
+        && extraction.dueDate().value().isBefore(extraction.invoiceDate().value())) {
+      issues.add(new ApiModels.InvoiceValidationIssue(
+          "dueDate", "Due date is earlier than the invoice date; review the extracted dates"));
+    }
+    if ((extraction.total().value() == null) != (extraction.currency().value() == null)) {
+      issues.add(new ApiModels.InvoiceValidationIssue(
+          "total", "Total and currency should either both be present or both be missing"));
+    }
+    return List.copyOf(issues);
   }
 
   private static <T> ApiModels.InvoiceField<T> invoiceField(com.begics.rag.domain.InvoiceField<T> field) {

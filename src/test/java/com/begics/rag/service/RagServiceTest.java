@@ -137,6 +137,32 @@ class RagServiceTest {
   }
 
   @Test
+  void runsPlannedSearchQueriesThenDeduplicatesCandidatesBeforeReranking() {
+    RetrievedChunk shared = new RetrievedChunk("doc-1", "source.txt", 0, "shared passage", 0.9);
+    RetrievedChunk focused = new RetrievedChunk("doc-2", "manual.txt", 1, "focused passage", 0.8);
+    when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1).equals("setup overview")
+            ? List.of(shared) : List.of(shared, focused));
+    List<RetrievedChunk> rerankedCandidates = new java.util.ArrayList<>();
+    RagService multiQueryService = new RagService(store, embeddings,
+        (question, context) -> context, (query, candidates, limit) -> {
+          rerankedCandidates.addAll(candidates);
+          return candidates;
+        }, s3DocumentReader, new TextChunker());
+
+    ApiModels.QueryResponse result = multiQueryService.queryWithSearchQueries(
+        "How do I set it up?", List.of("setup overview", "setup prerequisites"),
+        WorkspaceAccessService.LEGACY_WORKSPACE_ID, null, null);
+
+    assertThat(result.answer()).contains("shared passage", "focused passage");
+    assertThat(rerankedCandidates).containsExactly(shared, focused);
+    verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("setup overview"),
+        any(), eq("test-model-v1"), eq(20));
+    verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("setup prerequisites"),
+        any(), eq("test-model-v1"), eq(20));
+  }
+
+  @Test
   void forwardsSourceAndDocumentTypeFiltersToRetrieval() {
     when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class),
         org.mockito.ArgumentMatchers.any(DocumentStore.DocumentFilter.class))).thenReturn(List.of());
@@ -147,6 +173,37 @@ class RagServiceTest {
 
     verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("question"), any(),
         eq("test-model-v1"), eq(20), eq(filter));
+  }
+
+  @Test
+  void appliesASelectedAssistantProfileOnlyToTheAnswerPrompt() {
+    RetrievedChunk chunk = new RetrievedChunk("doc-1", "source.txt", 0, "source evidence", 0.9);
+    when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class)))
+        .thenReturn(List.of(chunk));
+    List<String> suppliedQuestions = new java.util.ArrayList<>();
+    RagService profiledService = new RagService(store, embeddings,
+        (question, context) -> {
+          suppliedQuestions.add(question);
+          return "answer";
+        }, reranker, s3DocumentReader, new TextChunker());
+
+    profiledService.query(new ApiModels.QueryRequest("How do I fix it?", null, null, "support"),
+        WorkspaceAccessService.LEGACY_WORKSPACE_ID);
+
+    assertThat(suppliedQuestions).containsExactly(
+        "Answer as a product support assistant. Give concise troubleshooting steps and state "
+            + "when the indexed sources do not establish a solution. Question: How do I fix it?");
+    verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("How do I fix it?"),
+        any(), eq("test-model-v1"), eq(20));
+  }
+
+  @Test
+  void rejectsUnknownAssistantProfiles() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        service.query(new ApiModels.QueryRequest("question", null, null, "unrestricted"),
+            WorkspaceAccessService.LEGACY_WORKSPACE_ID))
+        .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+        .hasMessageContaining("Unsupported assistant mode");
   }
 
   @Test

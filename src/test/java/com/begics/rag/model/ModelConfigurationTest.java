@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
-          DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class);
+          DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class)
+      .withBean(ObjectMapper.class, ObjectMapper::new);
 
   @Test
   void usesOfflineModelsByDefault() {
@@ -18,6 +20,7 @@ class ModelConfigurationTest {
       assertThat(context).hasSingleBean(ChatModel.class);
       assertThat(context).doesNotHaveBean(StructuredChatModel.class);
       assertThat(context).hasSingleBean(Reranker.class);
+      assertThat(context).hasSingleBean(AgentPlanner.class);
     });
   }
 
@@ -41,6 +44,7 @@ class ModelConfigurationTest {
           assertThat(context).hasSingleBean(ChatModel.class);
           assertThat(context).hasSingleBean(StructuredChatModel.class);
           assertThat(context).hasSingleBean(Reranker.class);
+          assertThat(context).hasSingleBean(AgentPlanner.class);
           assertThat(context).hasSingleBean(InfomaniakSpeechTranscription.class);
           InfomaniakAiModels.InfomaniakAiProperties properties =
               context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);

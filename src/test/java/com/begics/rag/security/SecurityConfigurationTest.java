@@ -24,6 +24,9 @@ import com.begics.rag.service.InvoiceExtractionService;
 import com.begics.rag.service.AnswerFeedbackService;
 import com.begics.rag.service.PipelineInfoService;
 import com.begics.rag.service.StorageQuotaService;
+import com.begics.rag.service.DocumentCompareService;
+import com.begics.rag.service.DocumentContentService;
+import com.begics.rag.service.AgentService;
 import com.begics.rag.service.RagService;
 import com.begics.rag.service.WorkspaceAccessService;
 import com.begics.rag.contract.ApiModels.IndexedDocumentResponse;
@@ -95,6 +98,15 @@ class SecurityConfigurationTest {
   private StorageQuotaService storageQuotaService;
 
   @MockitoBean
+  private DocumentContentService documentContentService;
+
+  @MockitoBean
+  private DocumentCompareService documentCompareService;
+
+  @MockitoBean
+  private AgentService agentService;
+
+  @MockitoBean
   private PipelineInfoService pipelineInfoService;
 
   @MockitoBean
@@ -113,8 +125,84 @@ class SecurityConfigurationTest {
         .andExpect(status().isUnauthorized());
     mvc.perform(get("/api/csrf")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/documents/" + UUID.randomUUID() + "/content"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(withCsrf(post("/api/documents/compare").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"firstKey\":\"uploads/a/one.txt\",\"secondKey\":\"uploads/a/two.txt\"}")))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(withCsrf(post("/api/agent/query").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"question\":\"compare two policies\"}")))
+        .andExpect(status().isUnauthorized());
     mvc.perform(get("/api/storage")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/pipeline-info")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/feedback/summary")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void readsIndexedSourceContextByWorkspaceDocumentAndChunk() throws Exception {
+    UUID documentId = UUID.randomUUID();
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(documentContentService.read(WORKSPACE_ID, documentId, 3, "quoted passage"))
+        .thenReturn(new com.begics.rag.contract.ApiModels.DocumentContentResponse(
+            documentId.toString(), "notes.txt", "quoted passage", 0));
+
+    mvc.perform(get("/api/documents/" + documentId + "/content")
+            .param("chunk", "3").param("excerpt", "quoted passage").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.filename").value("notes.txt"))
+        .andExpect(jsonPath("$.matchOffset").value(0));
+    org.mockito.Mockito.verify(documentContentService).read(WORKSPACE_ID, documentId, 3, "quoted passage");
+  }
+
+  @Test
+  void comparesWorkspaceDocumentsThroughTheAuthenticatedApi() throws Exception {
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(documentCompareService.compare(any(), eq(WORKSPACE_ID)))
+        .thenReturn(new com.begics.rag.contract.ApiModels.DocumentCompareResponse(
+            "first.txt", "second.txt", List.of("removed"), List.of("added")));
+
+    mvc.perform(withCsrf(post("/api/documents/compare").with(oidcLogin())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"firstKey\":\"uploads/" + WORKSPACE_ID
+                + "/first.txt\",\"secondKey\":\"uploads/" + WORKSPACE_ID + "/second.txt\"}")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.removedParagraphs[0]").value("removed"))
+        .andExpect(jsonPath("$.addedParagraphs[0]").value("added"));
+  }
+
+  @Test
+  void returnsWorkspaceScopedFeedbackSummary() throws Exception {
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(answerFeedbackService.summary(WORKSPACE_ID))
+        .thenReturn(new com.begics.rag.contract.ApiModels.AnswerFeedbackSummaryResponse(10, 7, 3, 70.0));
+
+    mvc.perform(get("/api/feedback/summary").with(oidcLogin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalResponses").value(10))
+        .andExpect(jsonPath("$.helpfulResponses").value(7))
+        .andExpect(jsonPath("$.unhelpfulResponses").value(3))
+        .andExpect(jsonPath("$.helpfulRatePercent").value(70.0));
+    org.mockito.Mockito.verify(answerFeedbackService).summary(WORKSPACE_ID);
+  }
+
+  @Test
+  void runsAgenticQueriesOnlyForAuthenticatedWorkspaceRequests() throws Exception {
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(agentService.query(any(), eq(WORKSPACE_ID)))
+        .thenReturn(new com.begics.rag.contract.ApiModels.AgentQueryResponse(
+            "Grounded answer", List.of(), List.of(
+                new com.begics.rag.contract.ApiModels.AgentStepResponse(
+                    "planner", "completed", "Plan the task", "Selected one search query.", 2)),
+            null, 6));
+
+    mvc.perform(withCsrf(post("/api/agent/query").with(oidcLogin())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"question\":\"Where is the policy?\"}")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.answer").value("Grounded answer"))
+        .andExpect(jsonPath("$.steps[0].tool").value("planner"))
+        .andExpect(jsonPath("$.maxSteps").value(6));
+    org.mockito.Mockito.verify(agentService).query(any(), eq(WORKSPACE_ID));
   }
 
   @Test
@@ -181,7 +269,8 @@ class SecurityConfigurationTest {
     when(pipelineInfoService.current()).thenReturn(
         new com.begics.rag.contract.ApiModels.PipelineInfoResponse(
             "Infomaniak AI", "Embeddings API", "embedding-model", 3584,
-            "Rerank API", "rerank-model", "Chat API", "chat-model"));
+            "Rerank API", "rerank-model", "Chat API", "chat-model",
+            "Structured planner", "Search and compare", 3));
 
     mvc.perform(get("/api/pipeline-info").with(oidcLogin()))
         .andExpect(status().isOk())
@@ -192,7 +281,10 @@ class SecurityConfigurationTest {
         .andExpect(jsonPath("$.rerankService").value("Rerank API"))
         .andExpect(jsonPath("$.rerankModel").value("rerank-model"))
         .andExpect(jsonPath("$.chatService").value("Chat API"))
-        .andExpect(jsonPath("$.chatModel").value("chat-model"));
+        .andExpect(jsonPath("$.chatModel").value("chat-model"))
+        .andExpect(jsonPath("$.agentPlanner").value("Structured planner"))
+        .andExpect(jsonPath("$.agentTools").value("Search and compare"))
+        .andExpect(jsonPath("$.maxAgentSearches").value(3));
   }
 
   @Test

@@ -76,6 +76,17 @@ public class JdbcDocumentStore implements DocumentStore {
   }
 
   @Override
+  public java.util.Optional<SourceChunk> sourceChunk(UUID workspaceId, UUID documentId, int chunkNumber) {
+    return jdbc.query("""
+        select d.source, c.content
+         from documents d join chunks c on c.document_id = d.id
+        where d.id = ? and d.workspace_id = ? and c.chunk_no = ?
+        """, rs -> rs.next()
+        ? java.util.Optional.of(new SourceChunk(rs.getString(1), rs.getString(2)))
+        : java.util.Optional.empty(), documentId, workspaceId, chunkNumber);
+  }
+
+  @Override
   @Transactional
   public void deleteBySource(UUID workspaceId, String source) {
     jdbc.update("delete from documents where workspace_id = ? and source = ?", workspaceId, source);

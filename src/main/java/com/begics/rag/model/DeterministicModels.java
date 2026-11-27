@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import java.util.List;
 
 @Configuration
 @ConditionalOnProperty(name = "rag.provider", havingValue = "offline", matchIfMissing = true)
@@ -39,5 +40,17 @@ public class DeterministicModels {
   @Bean
   Reranker reranker() {
     return (query, candidates, limit) -> candidates.stream().limit(limit).toList();
+  }
+
+  @Bean
+  AgentPlanner agentPlanner() {
+    return (question, documents) -> {
+      String query = question.strip();
+      if (query.length() > 500) {
+        int boundary = query.lastIndexOf(' ', 500);
+        query = query.substring(0, boundary > 0 ? boundary : 500);
+      }
+      return new AgentPlanner.AgentPlan(List.of(query), null, null, null);
+    };
   }
 }
