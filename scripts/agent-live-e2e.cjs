@@ -264,7 +264,17 @@ async function run() {
 
     const indexingJob = await waitForIndexing(page, workspaceId);
     if (indexingJob?.status !== "COMPLETED" || indexingJob.chunks < 1) {
-      throw new Error(`Synthetic document indexing failed with status ${indexingJob?.status ?? "unknown"}.`);
+      const failure = String(indexingJob?.errorMessage || "");
+      const validationFailure = failure.match(/failed validation: invalid ([a-z ]+)/i)?.[1];
+      const failureCode = failure.match(/\b([45]\d{2}) [A-Z_]+\b/)?.[1];
+      const failureType = validationFailure
+        ? `screening output failed validation (${validationFailure.trim()})`
+        : failureCode
+          ? `screening returned HTTP ${failureCode}`
+          : "provider error details are omitted";
+      throw new Error(
+        `Synthetic document indexing failed during ${indexingJob?.stage ?? "an unknown stage"}; ${failureType}.`,
+      );
     }
 
     const question = "Welcher Testcode gehört zum fiktiven Projekt ORBIT?";

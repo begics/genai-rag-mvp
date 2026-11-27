@@ -2,6 +2,7 @@ package com.begics.rag.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +74,27 @@ class InfomaniakDocumentRiskScreeningTest {
           assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
           assertThat(response.getReason()).contains("invalid evidence");
         });
+    verify(chat, times(2)).answerWithSchema(
+        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.anyString());
+  }
+
+  @Test
+  void doesNotRetryProviderRequestFailuresOrExposeTheirMessages() {
+    when(chat.answerWithSchema(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.anyString()))
+        .thenThrow(new IllegalStateException("private provider response"));
+
+    assertThatThrownBy(() -> screening.evaluate("Document text"))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(error -> {
+          var response = (ResponseStatusException) error;
+          assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+          assertThat(response.getReason()).isEqualTo("The AI provider could not complete document screening");
+        });
+    verify(chat).answerWithSchema(
+        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.anyString());
   }
 
   @Test

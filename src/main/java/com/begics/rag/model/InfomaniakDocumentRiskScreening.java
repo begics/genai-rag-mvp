@@ -12,6 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 
 public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
   public static final int MAX_SCREENING_CHARACTERS = 100_000;
+  private static final int MAX_SCREENING_ATTEMPTS = 2;
   private static final Set<String> CATEGORIES = Set.of(
       "IMPERSONATION", "PAYMENT_REDIRECTION", "CREDENTIAL_REQUEST",
       "SUSPICIOUS_LINK", "MALWARE_OR_EXECUTABLE", "OTHER");
@@ -63,19 +64,34 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
       throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
           "AI screening is limited to 100,000 extracted characters per document");
     }
-    try {
-      String providerText = redactor.redact(text);
-      String output = chat.answerWithSchema(INSTRUCTIONS, providerText, SCHEMA);
-      JsonNode root = objectMapper.reader()
-          .with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-          .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
-          .readTree(output);
-      return parseResult(root, providerText);
-    } catch (ResponseStatusException exception) {
-      throw exception;
-    } catch (Exception exception) {
-      throw invalidResponse("JSON");
+    String providerText = redactor.redact(text);
+    ResponseStatusException lastFailure = null;
+    for (int attempt = 0; attempt < MAX_SCREENING_ATTEMPTS; attempt++) {
+      String output;
+      try {
+        output = chat.answerWithSchema(INSTRUCTIONS, providerText, SCHEMA);
+      } catch (ResponseStatusException exception) {
+        throw exception;
+      } catch (RuntimeException exception) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_GATEWAY, "The AI provider could not complete document screening");
+      }
+      try {
+        JsonNode root = objectMapper.reader()
+            .with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .readTree(output);
+        return parseResult(root, providerText);
+      } catch (ResponseStatusException exception) {
+        if (exception.getStatusCode().value() != HttpStatus.BAD_GATEWAY.value()) {
+          throw exception;
+        }
+        lastFailure = exception;
+      } catch (Exception exception) {
+        lastFailure = invalidResponse("JSON");
+      }
     }
+    throw lastFailure;
   }
 
   private static ScreeningResult parseResult(JsonNode root, String text) {
