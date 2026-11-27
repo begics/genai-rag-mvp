@@ -3,6 +3,7 @@ package com.begics.rag.service;
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
+import com.begics.rag.store.UploadedObjectStore;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -41,12 +42,15 @@ public class DocumentUploadService {
       Map.entry("flac", new FileType("audio/flac", false, true)));
 
   private final S3ObjectWriter objectWriter;
+  private final UploadedObjectStore uploadedObjects;
   private final StorageQuotaService storageQuota;
   private final SpeechTranscription transcription;
 
   public DocumentUploadService(
-      S3ObjectWriter objectWriter, StorageQuotaService storageQuota, SpeechTranscription transcription) {
+      S3ObjectWriter objectWriter, UploadedObjectStore uploadedObjects, StorageQuotaService storageQuota,
+      SpeechTranscription transcription) {
     this.objectWriter = objectWriter;
+    this.uploadedObjects = uploadedObjects;
     this.storageQuota = storageQuota;
     this.transcription = transcription;
   }
@@ -84,6 +88,7 @@ public class DocumentUploadService {
     String objectPath = objectPath(relativePath, filename);
     String key = "uploads/" + workspaceId + "/" + UUID.randomUUID() + "/" + objectPath;
     objectWriter.write(key, fileType.contentType(), file);
+    uploadedObjects.record(key, workspaceId, subject);
     return new ApiModels.UploadResponse(key, filename, fileType.contentType(), file.getSize(),
         fileType.indexable() || (fileType.transcribable() && transcription.available()));
   }

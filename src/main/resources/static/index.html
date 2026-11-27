@@ -356,13 +356,17 @@
         <ol class="pipeline-steps" id="pipeline-steps" aria-label="File indexing flow">
           <li class="pipeline-step" data-pipeline-node="browser"><strong>Browser &amp; API</strong>Upload · auth · workspace check</li>
           <li class="pipeline-step" data-pipeline-node="s3"><strong>RustFS · S3</strong>Original file</li>
-          <li class="pipeline-step" data-pipeline-node="queue"><strong>PostgreSQL</strong>Durable indexing job</li>
+          <li class="pipeline-step" data-pipeline-node="queue"><strong>PostgreSQL</strong>Durable screening job</li>
           <li class="pipeline-step" data-pipeline-node="worker"><strong>Spring Boot</strong>Background worker · 2 workers</li>
-          <li class="pipeline-step" data-pipeline-node="chunks"><strong>Extract &amp; chunk</strong>UTF-8 / PDFBox · 1,500 chars · 200 overlap</li>
+          <li class="pipeline-step" data-pipeline-node="antivirus"><strong>ClamAV scan</strong>Private scanner · uploaded originals · blocks on detection or outage</li>
+          <li class="pipeline-step" data-pipeline-node="extract"><strong>Extract / transcribe</strong>PDFBox · UTF-8 · optional Whisper</li>
+          <li class="pipeline-step" data-pipeline-node="screening"><strong>AI evidence screening</strong>Quoted indicators · source locations · uncertainty<small data-pipeline-model="document-screening-step">Loading screening model…</small></li>
+          <li class="pipeline-step" data-pipeline-node="review"><strong>Workspace owner</strong>Required approval before indexing</li>
+          <li class="pipeline-step" data-pipeline-node="chunks"><strong>Chunk approved text</strong>1,500 chars · 200 overlap</li>
           <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI embeddings</strong><small data-pipeline-service="embedding">Loading service…</small><small data-pipeline-model="embedding">Loading model…</small></li>
           <li class="pipeline-step" data-pipeline-node="index"><strong>PostgreSQL</strong>Chunks · full-text · pgvector</li>
         </ol>
-        <p class="pipeline-note"><strong>Media path:</strong> when the Infomaniak provider is configured, supported audio/video files are sent to its asynchronous Whisper transcription service; the returned transcript then follows the same chunking and indexing path. Offline mode does not transcribe media.</p>
+        <p class="pipeline-note"><strong>Media path:</strong> ClamAV scans the uploaded original before extraction or transcription. Supported audio/video is sent to Infomaniak Whisper only after a clean scan; the resulting transcript is screened before approval. Direct text submissions have no uploaded file to scan. Detection or scanner outage blocks processing, and offline mode cannot screen or transcribe.</p>
       </div>
       <div class="pipeline-lane">
         <h3 class="pipeline-lane-title">2 · Question &amp; answer</h3>
@@ -405,6 +409,8 @@
         <span class="pipeline-component"><strong>Reranker:</strong> <span data-pipeline-model="rerank-summary">Loading…</span></span>
         <span class="pipeline-component"><strong>Answer / extraction:</strong> <span data-pipeline-model="chat-summary">Loading…</span></span>
         <span class="pipeline-component"><strong>Planner:</strong> <span data-pipeline-model="planner-summary">Loading…</span></span>
+        <span class="pipeline-component"><strong>Document screening:</strong> <span data-pipeline-model="document-screening-summary">Loading screening model…</span></span>
+        <span class="pipeline-component"><strong>Malware scanner:</strong> ClamAV · private Compose network · fail-closed</span>
         <span class="pipeline-component"><strong>Model routing:</strong> the planner model plans; the chat model answers and extracts invoice fields</span>
         <span class="pipeline-component"><strong>Agent tools:</strong> <span data-pipeline-model="agent-tools">Loading…</span></span>
         <span class="pipeline-component"><strong>Agent guardrails:</strong> read-only · max <span data-pipeline-model="agent-search-limit">3</span> searches · listed document IDs only</span>
@@ -423,6 +429,7 @@
           <h4>Files &amp; data</h4>
           <ul>
             <li><strong>RustFS:</strong> S3-compatible originals</li>
+            <li><strong>ClamAV:</strong> private Compose service scans uploaded originals before extraction or transcription; detections and scanner outages stop processing</li>
             <li><strong>PostgreSQL:</strong> workspaces, documents, durable jobs, and feedback</li>
             <li><strong>pgvector + PostgreSQL full-text:</strong> vector and lexical indexes</li>
             <li><strong>PDFBox 3 / UTF-8 reader:</strong> text extraction before chunking</li>
@@ -434,7 +441,7 @@
             <li><strong>Embeddings:</strong> index chunks and questions using the same configured model</li>
             <li><strong>Reranker:</strong> reorders retrieved candidates before answer generation</li>
             <li><strong>Chat model:</strong> grounded answers and structured invoice extraction</li>
-            <li><strong>Planner:</strong> separate planning model; offline mode uses deterministic local planning</li>
+            <li><strong>Planner and document screening:</strong> Infomaniak structured-output model; offline planning is deterministic, but screening is unavailable and fails closed</li>
             <li><strong>Whisper transcription:</strong> optional provider path for supported media</li>
           </ul>
         </section>
@@ -454,7 +461,8 @@
             <li><strong>Invoice extraction:</strong> structured output is checked for allowed fields and valid types, dates, amounts, and source quotations; review extracted values before use.</li>
             <li><strong>Upload validation:</strong> uploads are limited to 20 MiB and checked by file signature or strict UTF-8 rather than trusting the supplied MIME type; each user has 1 GB object and indexed-data quotas aggregated across workspaces.</li>
             <li><strong>Not implemented:</strong> comprehensive PII detection, general-purpose moderation, distributed rate limits, and a monetary cost cap.</li>
-            <li><strong>Approval:</strong> no approval gate because current agent tools cannot make changes or external actions</li>
+            <li><strong>Document review:</strong> findings include exact quotations, validated extracted-text locations, indicator categories, and uncertainty or missing context; the model does not issue a fraud/safety verdict, and workspace-owner approval is required.</li>
+            <li><strong>Malware:</strong> ClamAV scans original uploaded bytes before extraction or transcription; detections and scanner outages block further processing. A clean scan does not prove a file is safe.</li>
           </ul>
         </section>
         <section class="component-card">
@@ -580,7 +588,7 @@
         <p class="privacy-note">Exact added/removed paragraphs · 100,000 extracted characters maximum per file.</p>
         <div id="compare-results" aria-live="polite"></div>
         <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
-        <div class="privacy-note"><strong>Private workspace.</strong> Supported audio/video files are sent to Infomaniak AI for Whisper transcription only when you choose “Index for chat”; the resulting transcript is stored in your private index.</div>
+        <div class="privacy-note"><strong>Private workspace.</strong> Original uploaded files are scanned by the private ClamAV service before extraction or transcription; a detection or scanner outage blocks processing. Extracted text and transcripts are sent to Infomaniak for evidence-based screening when you request indexing. Every item waits for your approval; the model returns indicators and uncertainty, not a fraud/safety verdict. Original audio/video sent for Whisper transcription is not redacted. Neither check guarantees that a document is safe.</div>
       </aside>
     </div>
   </main>
@@ -612,6 +620,8 @@
       chatService: document.querySelector('[data-pipeline-service="chat"]'),
       chat: document.querySelector('[data-pipeline-model="chat"]'),
       agentPlanner: document.querySelector('[data-pipeline-model="agent-planner"]'),
+      documentScreeningStep: document.querySelector('[data-pipeline-model="document-screening-step"]'),
+      documentScreeningSummary: document.querySelector('[data-pipeline-model="document-screening-summary"]'),
       embeddingSummary: document.querySelector('[data-pipeline-model="embedding-summary"]'),
       rerankSummary: document.querySelector('[data-pipeline-model="rerank-summary"]'),
       chatSummary: document.querySelector('[data-pipeline-model="chat-summary"]'),
@@ -639,12 +649,15 @@
 
     const stageLabels = {
       QUEUED: "Waiting in the database queue",
-      READING: "Worker is reading the file from S3 and extracting text",
-      TRANSCRIBING: "Transcribing audio/video with Infomaniak Whisper",
+      READING: "ClamAV scan passed; worker is extracting text",
+      TRANSCRIBING: "ClamAV scan passed; transcribing audio/video with Infomaniak Whisper",
+      SCREENING: "Checking extracted content for evidence-based indicators with AI",
+      REVIEW_PENDING: "Waiting for your approval before indexing",
       CHUNKING: "Splitting extracted text into chunks",
       EMBEDDING: "Creating search embeddings with the AI service",
       SAVING: "Saving chunks and embeddings to PostgreSQL pgvector",
       REINDEXING: "Refreshing embeddings",
+      REJECTED: "Rejected; content was not indexed",
       COMPLETED: "Indexing complete",
       FAILED: "Indexing failed"
     };
@@ -941,8 +954,12 @@
         details.className = "file-status";
         const activeJob = currentJobs.find(job => job.source === file.key
           && (job.status === "QUEUED" || job.status === "PROCESSING"));
+        const reviewJob = currentJobs.find(job => job.source === file.key
+          && job.status === "AWAITING_APPROVAL");
         if (activeJob) {
           details.textContent = `Indexing · ${stageLabels[activeJob.stage] || activeJob.stage}`;
+        } else if (reviewJob) {
+          details.textContent = "Awaiting approval · review the quoted findings and uncertainty";
         } else if (file.indexed) {
           details.textContent = `Indexed · ${file.chunks} chunks · ${formatBytes(file.indexedBytes)} index data`
             + (file.sizeBytes > maxIndexFileBytes ? " · re-indexing unavailable above 20 MiB" : "");
@@ -961,8 +978,8 @@
           const indexButton = document.createElement("button");
           indexButton.type = "button";
           indexButton.className = "row-action";
-          indexButton.textContent = file.indexed ? "Re-index" : "Index for chat";
-          indexButton.disabled = Boolean(activeJob);
+          indexButton.textContent = file.indexed ? "Re-screen and re-index" : "Screen and request approval";
+          indexButton.disabled = Boolean(activeJob || reviewJob);
           indexButton.addEventListener("click", async () => {
             indexButton.disabled = true;
             try {
@@ -1011,8 +1028,10 @@
         deleteButton.type = "button";
         deleteButton.className = "row-action danger";
         deleteButton.textContent = "Delete";
-        deleteButton.disabled = Boolean(activeJob);
-        deleteButton.title = activeJob ? "Wait for indexing to finish before deleting" : "Delete this file and its index";
+        deleteButton.disabled = Boolean(activeJob || reviewJob);
+        deleteButton.title = activeJob || reviewJob
+          ? "Finish or reject the review before deleting"
+          : "Delete this file and its index";
         deleteButton.addEventListener("click", async () => {
           if (!window.confirm(`Delete "${file.filename}" from S3 and remove its indexed data?`)) return;
           deleteButton.disabled = true;
@@ -1111,7 +1130,7 @@
             ? " · Transcription requires RAG_PROVIDER=infomaniak."
             : " · This format cannot be indexed.";
         } else if (isTranscribableName(uploaded.filename)) {
-          status.textContent += " · Infomaniak Whisper will transcribe it when indexed.";
+          status.textContent += " · Whisper transcription and AI screening run only after you submit it for review.";
         }
       } catch (error) {
         status.textContent = error.message;
@@ -1284,6 +1303,11 @@
         pipelineModels.chat.textContent = info.chatModel;
         pipelineModels.chatSummary.textContent = `${info.chatModel} · ${info.chatService}`;
         pipelineModels.agentPlanner.textContent = info.agentPlanner;
+        const documentScreening = info.provider === "Infomaniak AI"
+          ? info.agentPlanner
+          : "Unavailable in offline mode; screening fails closed";
+        pipelineModels.documentScreeningStep.textContent = documentScreening;
+        pipelineModels.documentScreeningSummary.textContent = documentScreening;
         pipelineModels.plannerSummary.textContent = info.agentPlanner;
         pipelineModels.agentTools.textContent = info.agentTools;
         pipelineModels.agentSearchLimit.textContent = info.maxAgentSearches;
@@ -1299,7 +1323,15 @@
       const stage = job?.stage || "QUEUED";
       const fileName = job?.source?.split("/").pop() || "document";
       if (!job) {
-        pipelineStatus.textContent = "No indexing jobs yet. Upload a supported file and choose “Index for chat”.";
+        pipelineStatus.textContent = "No indexing jobs yet. Upload a supported file and submit it for AI screening and approval.";
+        pipelineSummaryStatus.textContent = pipelineStatus.textContent;
+        pipelineSteps.forEach(step => step.classList.remove("current", "done", "failed"));
+        return;
+      }
+
+      if (job.status === "AWAITING_APPROVAL") {
+        pipelineStatus.textContent =
+          `${fileName}: evidence review is ready; human approval is required before indexing.`;
         pipelineSummaryStatus.textContent = pipelineStatus.textContent;
         pipelineSteps.forEach(step => step.classList.remove("current", "done", "failed"));
         return;
@@ -1309,13 +1341,15 @@
         QUEUED: "queue",
         READING: "worker",
         TRANSCRIBING: "worker",
+        SCREENING: "screening",
+        REVIEW_PENDING: "review",
         CHUNKING: "chunks",
         EMBEDDING: "embeddings",
         REINDEXING: "embeddings",
         SAVING: "index",
         COMPLETED: "index"
       }[stage];
-      const order = ["browser", "s3", "queue", "worker", "chunks", "embeddings", "index"];
+      const order = ["browser", "s3", "queue", "worker", "screening", "review", "chunks", "embeddings", "index"];
       const currentIndex = order.indexOf(currentNode);
       pipelineSteps.forEach((step, index) => {
         step.classList.remove("current", "done", "failed");
@@ -1333,6 +1367,8 @@
         pipelineStatus.textContent = `${fileName}: ${job.errorMessage || stageLabels.FAILED}`;
       } else if (completed) {
         pipelineStatus.textContent = `Last job: ${fileName} — complete, ${job.chunks} chunks stored in PostgreSQL.`;
+      } else if (job.status === "REJECTED") {
+        pipelineStatus.textContent = `${fileName}: review rejected; this content was not indexed.`;
       } else {
         pipelineStatus.textContent = `Currently processing: ${fileName} — ${stageLabels[stage] || stage}.`;
       }
@@ -1361,13 +1397,90 @@
         const detail = document.createElement("div");
         detail.className = `job-detail${job.status === "FAILED" ? " error" : ""}`;
         if (job.status === "COMPLETED") {
-          detail.textContent = `Complete · ${job.chunks} chunks indexed`;
+          detail.textContent = `Complete · ${job.chunks} chunks indexed · ${job.indexedDocumentId || "document ID unavailable"}`;
+        } else if (job.status === "AWAITING_APPROVAL") {
+          detail.textContent = "Evidence review · inspect quoted indicators, source locations, and uncertainty before approval.";
         } else if (job.status === "FAILED") {
           detail.textContent = job.errorMessage || stageLabels.FAILED;
+        } else if (job.status === "REJECTED") {
+          detail.textContent = "Rejected; content was not indexed.";
         } else {
           detail.textContent = `${job.status === "QUEUED" ? "Queued" : "In progress"} · ${stageLabels[job.stage] || job.stage}`;
         }
         row.append(title, detail);
+        const audit = [];
+        if (job.uploadedBy) audit.push(`Uploaded by ${job.uploadedBy} at ${job.uploadedAt}`);
+        if (job.submittedBy) audit.push(`Submitted by ${job.submittedBy}`);
+        if (job.screenedAt) audit.push(`Screened at ${job.screenedAt}`);
+        if (job.reviewedBy) audit.push(`${job.status === "REJECTED" ? "Rejected" : "Approved"} by ${job.reviewedBy} at ${job.reviewedAt}`);
+        if (job.indexedAt) audit.push(`Indexed at ${job.indexedAt}`);
+        if (audit.length) {
+          const provenance = document.createElement("small");
+          provenance.className = "job-detail";
+          provenance.textContent = audit.join(" · ");
+          row.append(provenance);
+        }
+        if (job.status === "AWAITING_APPROVAL") {
+          try {
+            const findings = JSON.parse(job.reviewFindings || "[]");
+            if (findings.length) {
+              const list = document.createElement("ul");
+              list.className = "job-detail";
+              for (const finding of findings) {
+                const item = document.createElement("li");
+                item.textContent =
+                  `${finding.category} · ${finding.location}: “${finding.evidence}” · Uncertainty / missing information: ${finding.uncertainty}`;
+                list.append(item);
+              }
+              row.append(list);
+            } else {
+              const empty = document.createElement("div");
+              empty.className = "job-detail";
+              empty.textContent =
+                "No specific indicators were cited. This is not a finding that the document is safe; review the original before approving.";
+              row.append(empty);
+            }
+          } catch {
+            const invalid = document.createElement("div");
+            invalid.className = "job-detail error";
+            invalid.textContent = "Screening details could not be displayed; do not approve this item.";
+            row.append(invalid);
+          }
+          const actions = document.createElement("div");
+          const approve = document.createElement("button");
+          approve.type = "button";
+          approve.className = "row-action";
+          approve.textContent = "Approve and index";
+          approve.addEventListener("click", async () => {
+            approve.disabled = true;
+            try {
+              await responseJson(await apiFetch(`/api/indexing-jobs/${job.id}/approve`, { method: "POST" }));
+              await refreshIndexingJobs();
+            } catch (error) {
+              storageMessage.textContent = error.message;
+              storageMessage.classList.add("error");
+              approve.disabled = false;
+            }
+          });
+          const reject = document.createElement("button");
+          reject.type = "button";
+          reject.className = "row-action danger";
+          reject.textContent = "Reject";
+          reject.addEventListener("click", async () => {
+            if (!window.confirm("Reject this document? Its extracted text will be discarded and not indexed.")) return;
+            reject.disabled = true;
+            try {
+              await responseJson(await apiFetch(`/api/indexing-jobs/${job.id}/reject`, { method: "POST" }));
+              await refreshIndexingJobs();
+            } catch (error) {
+              storageMessage.textContent = error.message;
+              storageMessage.classList.add("error");
+              reject.disabled = false;
+            }
+          });
+          actions.append(approve, reject);
+          row.append(actions);
+        }
         indexingJobList.append(row);
       }
 

@@ -176,16 +176,29 @@ export class RagSession {
     return this.post('/api/workspaces', { name }, { 'X-XSRF-TOKEN': csrf.token });
   }
 
+  async approveIndexingJob(workspaceId, jobId) {
+    const csrf = await this.get('/api/csrf');
+    return this.post(`/api/indexing-jobs/${jobId}/approve`, {}, {
+      'X-XSRF-TOKEN': csrf.token,
+      'X-Workspace-ID': workspaceId,
+    });
+  }
+
   async indexText(workspaceId, source, text) {
     const csrf = await this.get('/api/csrf');
     const job = await this.post('/api/indexing-jobs', { source, text }, {
       'X-XSRF-TOKEN': csrf.token,
       'X-Workspace-ID': workspaceId,
     });
+    let approvalRequested = false;
     for (let attempt = 0; attempt < 90; attempt++) {
       const status = await this.get(`/api/indexing-jobs/${job.id}`, {
         'X-Workspace-ID': workspaceId,
       });
+      if (status.status === 'AWAITING_APPROVAL' && !approvalRequested) {
+        await this.approveIndexingJob(workspaceId, job.id);
+        approvalRequested = true;
+      }
       if (status.status === 'COMPLETED') return status;
       if (status.status === 'FAILED') {
         throw new Error(`Indexing failed for ${source}; provider error details are omitted.`);

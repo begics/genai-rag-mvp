@@ -99,6 +99,33 @@ class JdbcDocumentStoreIntegrationTest {
   }
 
   @Test
+  void treatsSqlInjectionShapedSearchFiltersAsValuesAndPreservesWorkspaceIsolation() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    JdbcTemplate jdbc = jdbc();
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", firstWorkspace, "First");
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", secondWorkspace, "Second");
+    store.save(firstWorkspace, "private.txt", List.of("first workspace document"),
+        List.of(vector(1, 0)), "test-model", null);
+    store.save(secondWorkspace, "other.txt", List.of("second workspace document"),
+        List.of(vector(0, 1)), "test-model", null);
+
+    List<RetrievedChunk> sourceInjection = store.search(
+        firstWorkspace, "document", vector(1, 0), "test-model", 5,
+        new DocumentStore.DocumentFilter("missing.txt' OR 1=1 --", null));
+    List<RetrievedChunk> typeInjection = store.search(
+        firstWorkspace, "document", vector(1, 0), "test-model", 5,
+        new DocumentStore.DocumentFilter(null, "txt' OR 1=1 --"));
+
+    assertThat(sourceInjection).isEmpty();
+    assertThat(typeInjection).isEmpty();
+    assertThat(jdbc.queryForObject("select count(*) from documents", Integer.class)).isEqualTo(2);
+    assertThat(store.search(firstWorkspace, "document", vector(1, 0), "test-model", 5))
+        .extracting(RetrievedChunk::source)
+        .containsExactly("private.txt");
+  }
+
+  @Test
   void listsIndexedDocumentsAndChunkCountsOnlyForTheirWorkspace() {
     UUID firstWorkspace = UUID.randomUUID();
     UUID secondWorkspace = UUID.randomUUID();
@@ -134,14 +161,30 @@ class JdbcDocumentStoreIntegrationTest {
     UUID workspaceId = UUID.randomUUID();
     jdbc().update("insert into workspaces(id, name) values (?, ?)", workspaceId, "Jobs");
     IndexingJobStore jobs = new IndexingJobStore(jdbc());
-    IndexingJob created = jobs.create(workspaceId, "uploads/file/notes.txt", "uploads/file/notes.txt", null);
+    String key = "uploads/" + workspaceId + "/file/notes.txt";
+    new UploadedObjectStore(jdbc()).record(key, workspaceId, "uploader");
+    IndexingJob created = jobs.create(workspaceId, key, key, null, "submitter");
 
     assertThat(created.stage()).isEqualTo(IndexingJobStore.Stage.QUEUED);
+    assertThat(created.uploadedBy()).isEqualTo("uploader");
+    assertThat(created.uploadedAt()).isNotNull();
+    assertThat(created.submittedBy()).isEqualTo("submitter");
+    assertThat(jobs.markProcessing(created.id())).isTrue();
+    jobs.saveScreeningText(created.id(), "screened text");
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.SCREENING);
+    jobs.awaitApproval(created.id(), "screened text", "[]");
+    var pending = jobs.get(created.id(), workspaceId).orElseThrow();
+    assertThat(pending.status()).isEqualTo("AWAITING_APPROVAL");
+    assertThat(pending.screenedAt()).isNotNull();
+    assertThat(jobs.hasActiveObjectKey(workspaceId, key)).isTrue();
+    assertThatThrownBy(() -> jobs.complete(created.id(), "document-id", 1))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(jobs.approve(created.id(), workspaceId, "reviewer")).isTrue();
     assertThat(jobs.markProcessing(created.id())).isTrue();
     jobs.updateStage(created.id(), IndexingJobStore.Stage.CHUNKING);
     assertThat(jobs.get(created.id(), workspaceId).orElseThrow().stage())
         .isEqualTo(IndexingJobStore.Stage.CHUNKING);
-    jobs.complete(created.id(), 3);
+    jobs.complete(created.id(), "document-id", 3);
 
     assertThat(jobs.recent(workspaceId))
         .singleElement()
@@ -149,6 +192,10 @@ class JdbcDocumentStoreIntegrationTest {
           assertThat(job.status()).isEqualTo("COMPLETED");
           assertThat(job.stage()).isEqualTo(IndexingJobStore.Stage.COMPLETED);
           assertThat(job.chunks()).isEqualTo(3);
+          assertThat(job.reviewedBy()).isEqualTo("reviewer");
+          assertThat(job.reviewedAt()).isNotNull();
+          assertThat(job.indexedDocumentId()).isEqualTo("document-id");
+          assertThat(job.indexedAt()).isNotNull();
         });
   }
 
@@ -341,7 +388,11 @@ class JdbcDocumentStoreIntegrationTest {
     assertThat(failedTranscription.errorMessage()).contains("Re-index the file to retry");
     assertThat(failedTranscription.objectKey()).isNull();
     assertThat(jobs.markProcessing(created.id())).isTrue();
-    jobs.complete(created.id(), 3);
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.SCREENING);
+    jobs.awaitApproval(created.id(), "content for indexing", "[]");
+    assertThat(jobs.approve(created.id(), JdbcDocumentStore.LEGACY_WORKSPACE_ID, "reviewer")).isTrue();
+    assertThat(jobs.markProcessing(created.id())).isTrue();
+    jobs.complete(created.id(), "document-id", 3);
     assertThat(jobs.get(created.id()).orElseThrow().chunks()).isEqualTo(3);
     assertThat(jobs.get(created.id()).orElseThrow().status()).isEqualTo("COMPLETED");
     assertThat(jobs.get(created.id()).orElseThrow().content()).isNull();

@@ -75,10 +75,15 @@ async function uploadAndIndexText(session, workspaceId, source, text, onUploaded
     'X-XSRF-TOKEN': jobCsrf.token,
     'X-Workspace-ID': workspaceId,
   });
+  let approvalRequested = false;
   for (let attempt = 0; attempt < 90; attempt++) {
     const status = await session.get(`/api/indexing-jobs/${job.id}`, {
       'X-Workspace-ID': workspaceId,
     });
+    if (status.status === 'AWAITING_APPROVAL' && !approvalRequested) {
+      await session.approveIndexingJob(workspaceId, job.id);
+      approvalRequested = true;
+    }
     if (status.status === 'COMPLETED') return uploaded.key;
     if (status.status === 'FAILED') {
       throw new Error(`Synthetic S3 indexing failed for ${source}; provider error details are omitted.`);

@@ -3,6 +3,7 @@ package com.begics.rag.contract;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -15,7 +16,16 @@ public final class ApiModels {
   public record IngestResponse(String documentId, int chunks) {}
   public record ReindexResponse(int chunksEmbedded) {}
   public record IndexingJobResponse(
-      UUID id, String source, String status, String stage, int chunks, String errorMessage, String jobType) {}
+      UUID id, String source, String status, String stage, int chunks, String errorMessage, String jobType,
+      String reviewFindings, Instant screenedAt,
+      String submittedBy, String uploadedBy, Instant uploadedAt, String reviewedBy, Instant reviewedAt,
+      String indexedDocumentId, Instant indexedAt) {
+    public IndexingJobResponse(
+        UUID id, String source, String status, String stage, int chunks, String errorMessage, String jobType) {
+      this(id, source, status, stage, chunks, errorMessage, jobType, "[]",
+          null, null, null, null, null, null, null, null);
+    }
+  }
   public record UploadResponse(String key, String filename, String contentType, long sizeBytes,
                                boolean indexable) {}
   public record QueryRequest(@NotBlank @Size(max = 10_000) String question,

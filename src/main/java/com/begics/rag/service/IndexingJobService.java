@@ -22,13 +22,23 @@ public class IndexingJobService {
   }
 
   public ApiModels.IndexingJobResponse enqueueText(ApiModels.IngestRequest request, UUID workspaceId) {
-    return enqueue(jobs.create(workspaceId, request.source(), null, request.text()));
+    return enqueueText(request, workspaceId, "system");
+  }
+
+  public ApiModels.IndexingJobResponse enqueueText(
+      ApiModels.IngestRequest request, UUID workspaceId, String submittedBy) {
+    return enqueue(jobs.create(workspaceId, request.source(), null, request.text(), submittedBy));
   }
 
   public ApiModels.IndexingJobResponse enqueueS3(ApiModels.S3IngestRequest request, UUID workspaceId) {
+    return enqueueS3(request, workspaceId, "system");
+  }
+
+  public ApiModels.IndexingJobResponse enqueueS3(
+      ApiModels.S3IngestRequest request, UUID workspaceId, String submittedBy) {
     WorkspaceAccessService.requireObjectKey(request.key(), workspaceId);
     documents.validateIndexableSize(request.key());
-    return enqueue(jobs.create(workspaceId, request.key(), request.key(), null));
+    return enqueue(jobs.create(workspaceId, request.key(), request.key(), null, submittedBy));
   }
 
   public ApiModels.IndexingJobResponse enqueueReembed(UUID workspaceId) {
@@ -38,6 +48,27 @@ public class IndexingJobService {
   public ApiModels.IndexingJobResponse get(UUID id, UUID workspaceId) {
     return jobs.get(id, workspaceId).map(IndexingJobService::toResponse)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Indexing job not found"));
+  }
+
+  public ApiModels.IndexingJobResponse approve(UUID id, UUID workspaceId, String reviewer) {
+    if (jobs.get(id, workspaceId).isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Indexing job not found");
+    }
+    if (!jobs.approve(id, workspaceId, reviewer)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This job is not awaiting approval");
+    }
+    worker.process(id);
+    return get(id, workspaceId);
+  }
+
+  public ApiModels.IndexingJobResponse reject(UUID id, UUID workspaceId, String reviewer) {
+    if (jobs.get(id, workspaceId).isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Indexing job not found");
+    }
+    if (!jobs.reject(id, workspaceId, reviewer)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "This job is not awaiting approval");
+    }
+    return get(id, workspaceId);
   }
 
   public java.util.List<ApiModels.IndexingJobResponse> recent(UUID workspaceId) {
@@ -56,6 +87,9 @@ public class IndexingJobService {
 
   private static ApiModels.IndexingJobResponse toResponse(IndexingJobStore.IndexingJob job) {
     return new ApiModels.IndexingJobResponse(
-        job.id(), job.source(), job.status(), job.stage().name(), job.chunks(), job.errorMessage(), job.jobType());
+        job.id(), job.source(), job.status(), job.stage().name(), job.chunks(), job.errorMessage(), job.jobType(),
+        job.reviewFindings(), job.screenedAt(), job.submittedBy(),
+        job.uploadedBy(), job.uploadedAt(), job.reviewedBy(), job.reviewedAt(),
+        job.indexedDocumentId(), job.indexedAt());
   }
 }

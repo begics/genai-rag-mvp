@@ -74,6 +74,14 @@ public class InfomaniakAiModels {
     return new InfomaniakAgentPlanner(plannerChat, objectMapper);
   }
 
+  @Bean
+  DocumentRiskScreening infomaniakDocumentRiskScreening(
+      InfomaniakAiProperties properties, ObjectMapper objectMapper, ProviderTextRedactor redactor) {
+    StructuredChatModel screeningChat =
+        structuredChatModel(properties, properties.agentPlannerModel(), redactor);
+    return new InfomaniakDocumentRiskScreening(screeningChat, objectMapper, redactor);
+  }
+
   private static StructuredChatModel structuredChatModel(
       InfomaniakAiProperties properties, String modelName, ProviderTextRedactor redactor) {
     org.springframework.ai.chat.model.ChatModel model = OpenAiChatModel.builder()

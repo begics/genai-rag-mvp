@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.begics.rag.domain.SpeechTranscription;
 import com.begics.rag.storage.S3ObjectWriter;
+import com.begics.rag.store.UploadedObjectStore;
 import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -18,10 +19,11 @@ import java.nio.charset.StandardCharsets;
 
 class DocumentUploadServiceTest {
   private final S3ObjectWriter objectWriter = org.mockito.Mockito.mock(S3ObjectWriter.class);
+  private final UploadedObjectStore uploadedObjects = org.mockito.Mockito.mock(UploadedObjectStore.class);
   private final StorageQuotaService storageQuota = org.mockito.Mockito.mock(StorageQuotaService.class);
   private final SpeechTranscription transcription = org.mockito.Mockito.mock(SpeechTranscription.class);
   private final DocumentUploadService service =
-      new DocumentUploadService(objectWriter, storageQuota, transcription);
+      new DocumentUploadService(objectWriter, uploadedObjects, storageQuota, transcription);
 
   @Test
   void uploadsTextAndPdfAsIndexableFiles() {
@@ -35,6 +37,8 @@ class DocumentUploadServiceTest {
       assertThat(uploaded.indexable()).isTrue();
       assertThat(uploaded.key()).startsWith("uploads/");
       verify(objectWriter).write(uploaded.key(), uploaded.contentType(), file);
+      verify(uploadedObjects).record(
+          uploaded.key(), WorkspaceAccessService.LEGACY_WORKSPACE_ID, "legacy-test-subject");
     }
     verify(storageQuota, times(3)).checkS3Upload(eq("legacy-test-subject"),
         eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), anyLong());

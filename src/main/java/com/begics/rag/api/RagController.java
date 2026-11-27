@@ -31,33 +31,33 @@ public class RagController {
     this.workspaces = workspaces;
   }
   @PostMapping("/documents")
-  @ResponseStatus(HttpStatus.CREATED)
-  public ApiModels.IngestResponse ingest(Authentication authentication,
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiModels.IndexingJobResponse ingest(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.IngestRequest request) {
-    return service.ingest(request, workspaces.resolve(authentication, workspace));
+    return indexingJobs.enqueueText(request, workspaces.resolve(authentication, workspace), authentication.getName());
   }
   @PostMapping("/documents/s3")
-  @ResponseStatus(HttpStatus.CREATED)
-  public ApiModels.IngestResponse ingestFromS3(Authentication authentication,
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiModels.IndexingJobResponse ingestFromS3(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.S3IngestRequest request) {
     UUID workspaceId = workspaces.resolve(authentication, workspace);
-    return service.ingestFromS3(request, workspaceId);
+    return indexingJobs.enqueueS3(request, workspaceId, authentication.getName());
   }
   @PostMapping("/indexing-jobs")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public ApiModels.IndexingJobResponse enqueueText(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.IngestRequest request) {
-    return indexingJobs.enqueueText(request, workspaces.resolve(authentication, workspace));
+    return indexingJobs.enqueueText(request, workspaces.resolve(authentication, workspace), authentication.getName());
   }
   @PostMapping("/indexing-jobs/s3")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public ApiModels.IndexingJobResponse enqueueS3(Authentication authentication,
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @Valid @RequestBody ApiModels.S3IngestRequest request) {
-    return indexingJobs.enqueueS3(request, workspaces.resolve(authentication, workspace));
+    return indexingJobs.enqueueS3(request, workspaces.resolve(authentication, workspace), authentication.getName());
   }
   @org.springframework.web.bind.annotation.GetMapping("/indexing-jobs")
   public java.util.List<ApiModels.IndexingJobResponse> listIndexingJobs(Authentication authentication,
@@ -69,6 +69,19 @@ public class RagController {
       @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
       @org.springframework.web.bind.annotation.PathVariable UUID id) {
     return indexingJobs.get(id, workspaces.resolve(authentication, workspace));
+  }
+  @PostMapping("/indexing-jobs/{id}/approve")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiModels.IndexingJobResponse approveIndexingJob(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
+      @org.springframework.web.bind.annotation.PathVariable UUID id) {
+    return indexingJobs.approve(id, workspaces.resolve(authentication, workspace), authentication.getName());
+  }
+  @PostMapping("/indexing-jobs/{id}/reject")
+  public ApiModels.IndexingJobResponse rejectIndexingJob(Authentication authentication,
+      @RequestHeader(name = "X-Workspace-ID", required = false) String workspace,
+      @org.springframework.web.bind.annotation.PathVariable UUID id) {
+    return indexingJobs.reject(id, workspaces.resolve(authentication, workspace), authentication.getName());
   }
   @PostMapping("/documents/reindex-embeddings")
   @ResponseStatus(HttpStatus.ACCEPTED)

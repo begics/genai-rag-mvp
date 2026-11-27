@@ -3,6 +3,8 @@ package com.begics.rag.security;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -300,6 +302,12 @@ class SecurityConfigurationTest {
         .contains("data-pipeline-model=\"agent-planner\"")
         .contains("Answer model")
         .contains("data-pipeline-model=\"chat\"")
+        .contains("data-pipeline-model=\"document-screening-step\"")
+        .contains("data-pipeline-model=\"document-screening-summary\"")
+        .contains("ClamAV scan")
+        .contains("private Compose network · fail-closed")
+        .contains("Extract / transcribe")
+        .contains("AI evidence screening")
         .contains("Sign-in &amp; workspace access")
         .contains("Optional document workflows")
         .contains("Application &amp; access")
@@ -320,7 +328,7 @@ class SecurityConfigurationTest {
         .contains("Invoice extraction:")
         .contains("Upload validation:")
         .contains("pattern-based check is not comprehensive")
-        .contains("Approval:</strong> no approval gate")
+        .contains("Document review:</strong> findings include exact quotations, validated extracted-text locations")
         .contains("Operations &amp; boundaries")
         .contains("data-pipeline-model=\"embedding-summary\"")
         .contains("data-pipeline-model=\"rerank-summary\"")
@@ -401,7 +409,7 @@ class SecurityConfigurationTest {
   @Test
   void acceptsAuthenticatedWorkspaceScopedIndexingJobs() throws Exception {
     when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
-    when(indexingJobService.enqueueS3(any(S3IngestRequest.class), eq(WORKSPACE_ID)))
+    when(indexingJobService.enqueueS3(any(S3IngestRequest.class), eq(WORKSPACE_ID), anyString()))
         .thenReturn(new IndexingJobResponse(
             UUID.randomUUID(), "uploads/" + WORKSPACE_ID + "/file/notes.txt", "QUEUED", "QUEUED", 0, null, "INDEX"));
 
@@ -410,6 +418,22 @@ class SecurityConfigurationTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content("{\"key\":\"uploads/" + WORKSPACE_ID + "/file/notes.txt\"}"))
         .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void requiresAuthenticatedWorkspaceContextForReviewApproval() throws Exception {
+    UUID jobId = UUID.randomUUID();
+    when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
+    when(indexingJobService.approve(eq(jobId), eq(WORKSPACE_ID), anyString()))
+        .thenReturn(new IndexingJobResponse(
+            jobId, "uploads/" + WORKSPACE_ID + "/file/notes.txt",
+            "QUEUED", "QUEUED", 0, null, "INDEX"));
+
+    mvc.perform(withCsrf(post("/api/indexing-jobs/" + jobId + "/approve")).with(oidcLogin())
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isAccepted());
+
+    verify(indexingJobService).approve(eq(jobId), eq(WORKSPACE_ID), anyString());
   }
 
   @Test

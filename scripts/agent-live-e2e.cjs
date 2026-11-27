@@ -100,9 +100,17 @@ async function listWorkspaceInventory(page) {
 
 async function waitForIndexing(page, workspaceId) {
   const deadline = Date.now() + 300_000;
+  let approvalRequested = false;
   while (Date.now() < deadline) {
     const jobs = await requestJson(page, "/api/indexing-jobs", workspaceId);
     const job = jobs.find((item) => item.source?.endsWith(objectName));
+    if (job?.status === "AWAITING_APPROVAL" && !approvalRequested) {
+      const approval = await postJson(page, `/api/indexing-jobs/${job.id}/approve`, workspaceId, {});
+      if (approval.status !== 202) {
+        throw new Error(`Could not approve the synthetic test document (HTTP ${approval.status}).`);
+      }
+      approvalRequested = true;
+    }
     if (job && ["COMPLETED", "FAILED"].includes(job.status)) return job;
     await page.waitForTimeout(2_000);
   }
@@ -115,10 +123,19 @@ async function cleanupSyntheticFile(page, workspaceId) {
   const deadline = Date.now() + 300_000;
   while (Date.now() < deadline) {
     const jobs = await requestJson(page, "/api/indexing-jobs", workspaceId);
+    const pending = jobs.find(
+      (job) => job.source?.endsWith(objectName) && job.status === "AWAITING_APPROVAL",
+    );
+    if (pending) {
+      const rejection = await postJson(page, `/api/indexing-jobs/${pending.id}/reject`, workspaceId, {});
+      if (rejection.status !== 200) {
+        throw new Error(`Could not reject the pending synthetic test document (HTTP ${rejection.status}).`);
+      }
+    }
     const active = jobs.some(
       (job) =>
         job.source?.endsWith(objectName) &&
-        ["QUEUED", "PROCESSING"].includes(job.status),
+        ["QUEUED", "PROCESSING", "AWAITING_APPROVAL"].includes(job.status),
     );
     if (!active) break;
     await page.waitForTimeout(2_000);
@@ -129,7 +146,7 @@ async function cleanupSyntheticFile(page, workspaceId) {
     activeJobs.some(
       (job) =>
         job.source?.endsWith(objectName) &&
-        ["QUEUED", "PROCESSING"].includes(job.status),
+        ["QUEUED", "PROCESSING", "AWAITING_APPROVAL"].includes(job.status),
     )
   ) {
     throw new Error("Cannot safely delete the test file while its indexing job is active.");
