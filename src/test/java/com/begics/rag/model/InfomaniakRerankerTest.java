@@ -8,6 +8,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.begics.rag.domain.RetrievedChunk;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -31,7 +32,8 @@ class InfomaniakRerankerTest {
               {"index":0,"relevance_score":0.42}
             ]}
             """, MediaType.APPLICATION_JSON));
-    Reranker reranker = new InfomaniakReranker(builder, properties, new ProviderTextRedactor());
+    Reranker reranker = new InfomaniakReranker(
+        builder, properties, new ProviderTextRedactor(), new ProviderCallLimiter(new SimpleMeterRegistry(), 2));
     List<RetrievedChunk> candidates = List.of(
         new RetrievedChunk("d1", "one.txt", 0, "first", 0.8),
         new RetrievedChunk("d2", "two.txt", 1, "second", 0.7));
@@ -58,7 +60,8 @@ class InfomaniakRerankerTest {
         .andRespond(withSuccess("""
             {"results":[{"index":0,"relevance_score":0.9}]}
             """, MediaType.APPLICATION_JSON));
-    Reranker reranker = new InfomaniakReranker(builder, properties, new ProviderTextRedactor());
+    Reranker reranker = new InfomaniakReranker(
+        builder, properties, new ProviderTextRedactor(), new ProviderCallLimiter(new SimpleMeterRegistry(), 2));
     RetrievedChunk candidate = new RetrievedChunk(
         "d1", "one.txt", 0, "Contact orbit.synthetic@example.test", 0.8);
 

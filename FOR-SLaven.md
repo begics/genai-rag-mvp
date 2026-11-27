@@ -8,6 +8,16 @@ The model returns observations with exact quoted evidence, a source location, an
 
 The expanded system map in the private UI now shows the order of the uploaded-file scan, text extraction/transcription, evidence screening, owner approval, and indexing. It identifies ClamAV as a private Compose component and shows the configured screening/planner model after sign-in; this is configuration information, not a live scanner-health check. The UI also clarifies that direct text submissions have no original uploaded file for ClamAV to scan.
 
+## Provider and executor limits
+
+The synchronous RAG query waits for each AI operation, so a slow remote provider can occupy a servlet request thread. The code now gives OpenAI-compatible Infomaniak chat/embedding calls an explicit request timeout and bounds rerank/transcription HTTP connect and read times separately. It also limits concurrent provider operations with a shared semaphore. The semaphore rejects immediately at capacity with HTTP 503, rather than letting an unbounded line of provider calls build up. Its scope is one application process, not a cluster-wide limit.
+
+Micrometer records provider call duration/count, provider errors and rejections, current active calls and the configured capacity. The indexing executor has active-worker, queue-depth, remaining-capacity, and rejection metrics. It is intentionally bounded to two workers and a 100-task queue; if a new submission is rejected, the durable job is marked failed and the caller receives 503. This avoids telling clients a rejected job was accepted. Operators can read the exposed Actuator metrics endpoint only after authentication.
+
+On application startup, persisted queued jobs are dispatched into the bounded executor. If the executor fills during recovery, the dispatcher stops without failing those older jobs, then periodically retries them as queued tasks finish. A shared in-process tracker prevents a job from being queued twice while it is already waiting or running. This keeps restart recovery compatible with a bounded queue instead of assuming every durable job fits in memory at once.
+
+These are not a reactive rewrite and do not reduce provider latency. A query still waits for embedding, database retrieval, reranking, answer generation, and grounding verification; the changes bound resource usage and make failures/latency observable. If metrics later show request-thread pressure, add durable asynchronous query jobs with separate capacity, rather than simply making every remote call asynchronous and losing request/job ownership.
+
 ## How the flow works
 
 1. The upload is stored in S3-compatible storage, and the app records who uploaded it and when.
@@ -42,9 +52,9 @@ The existing controller → service → store/provider boundaries remain in plac
 
 ## Files and verification
 
-The implementation is centered on `IndexingJobWorker`, `IndexingJobStore`, `IndexingJobService`, `S3DocumentReader`, the ClamAV scanner, the `DocumentRiskScreening` adapters, and migration V12. The browser review UI and its CSP hash were updated; the API exposes workspace-scoped approve/reject actions. The system map names the scanner and screening model alongside the visible review gate. README and handoff documentation describe the gate and its limits.
+The implementation is centered on `IndexingJobWorker`, `IndexingJobStore`, `IndexingJobService`, `S3DocumentReader`, the ClamAV scanner, the `DocumentRiskScreening` adapters, and migration V12. The browser review UI and its CSP hash were updated; the API exposes workspace-scoped approve/reject actions. The system map names the scanner and screening model alongside the visible review gate. Provider call limits, timeouts, Micrometer metrics, and queue-saturation handling are configured in `InfomaniakAiModels`, `ProviderCallLimiter`, and `IndexingConfiguration`. README and handoff documentation describe the gate and its limits.
 
-Java tests cover evidence and location validation, prompt-injection handling, PDF page/text bounds, SQL-injection-shaped filters, worker ordering, service transitions, workspace-scoped API access, PostgreSQL persistence, ClamAV protocol streaming, detection, and scanner outage behavior. The complete `./mvnw -q test` suite passed, including PostgreSQL Testcontainers integration tests, and `git diff --check` passed. No provider call or deployment was performed.
+Existing Java tests cover evidence and location validation, prompt-injection handling, PDF page/text bounds, SQL-injection-shaped filters, worker ordering, service transitions, workspace-scoped API access, PostgreSQL persistence, ClamAV protocol streaming, detection, and scanner outage behavior. New tests cover provider limits, timeout configuration, executor saturation, and retrying persisted queue work after capacity returns. The previously reported full Maven-suite pass predates these latest provider/executor edits; the new tests have not run because Maven previously hit a sandbox denial reading `~/.m2/toolchains.xml`. No provider call or deployment was performed.
 
 ## Transferable lessons
 
@@ -54,3 +64,4 @@ Java tests cover evidence and location validation, prompt-injection handling, PD
 - Keep model observations separate from authorization. Evidence and uncertainty can inform a person, but should not grant permission to index.
 - When changing inline browser code under hash-based CSP, recalculate the hash and keep a test that verifies it against the actual HTML.
 - ClamAV is memory intensive; size the VM for the scanner in addition to the application, database, and object store, and keep signature updates and scanner health monitored.
+- A durable queue can outlive the capacity of an in-memory executor. Recovery should leave overflow work durable, retry it when capacity returns, and track submissions to avoid filling the executor with duplicate attempts.

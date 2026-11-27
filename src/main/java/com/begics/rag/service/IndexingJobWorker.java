@@ -20,67 +20,79 @@ public class IndexingJobWorker {
   private final RagService ragService;
   private final DocumentRiskScreening screening;
   private final ObjectMapper objectMapper;
+  private final IndexingJobDispatchTracker dispatchTracker;
 
   @Autowired
   public IndexingJobWorker(
-      IndexingJobStore jobs, RagService ragService, DocumentRiskScreening screening, ObjectMapper objectMapper) {
+      IndexingJobStore jobs, RagService ragService, DocumentRiskScreening screening,
+      ObjectMapper objectMapper, IndexingJobDispatchTracker dispatchTracker) {
     this.jobs = jobs;
     this.ragService = ragService;
     this.screening = screening;
     this.objectMapper = objectMapper;
+    this.dispatchTracker = dispatchTracker;
+  }
+
+  public IndexingJobWorker(
+      IndexingJobStore jobs, RagService ragService, DocumentRiskScreening screening, ObjectMapper objectMapper) {
+    this(jobs, ragService, screening, objectMapper, new IndexingJobDispatchTracker());
   }
 
   public IndexingJobWorker(IndexingJobStore jobs, RagService ragService) {
     this(jobs, ragService, text -> {
       throw new IllegalStateException("Document screening is not configured");
-    }, new ObjectMapper());
+    }, new ObjectMapper(), new IndexingJobDispatchTracker());
   }
 
   @Async("indexingTaskExecutor")
   public void process(UUID id) {
-    if (!jobs.markProcessing(id)) {
-      return;
-    }
     try {
-      IndexingJob job = jobs.get(id)
-          .orElseThrow(() -> new IllegalStateException("Indexing job disappeared: " + id));
-      if ("REEMBED".equals(job.jobType())) {
-        jobs.updateStage(id, Stage.REINDEXING);
-        jobs.complete(id, ragService.reindexMissingEmbeddings(job.workspaceId(), stage -> jobs.updateStage(id, stage))
-            .chunksEmbedded());
-      } else {
-        String text;
-        if (job.content() != null) {
-          text = job.content();
-        } else {
-          jobs.updateStage(id, S3DocumentReader.isTranscribable(job.objectKey())
-              ? Stage.TRANSCRIBING : Stage.READING);
-          text = ragService.readS3Document(job.objectKey());
-          jobs.saveScreeningText(id, text);
-        }
-        if (job.screenedAt() == null) {
-          jobs.updateStage(id, Stage.SCREENING);
-          DocumentRiskScreening.ScreeningResult result = screening.evaluate(text);
-          String findings;
-          try {
-            findings = objectMapper.writeValueAsString(result.findings());
-          } catch (Exception exception) {
-            throw new IllegalStateException("Could not serialize document screening findings", exception);
-          }
-          jobs.awaitApproval(id, text, findings);
-        } else {
-          if (job.reviewedAt() == null) {
-            throw new IllegalStateException("Indexing job has not been approved");
-          }
-          var result = ragService.indexText(
-              job.source(), text, job.workspaceId(), id, stage -> jobs.updateStage(id, stage));
-          jobs.complete(id, result.documentId(), result.chunks());
-        }
+      if (!jobs.markProcessing(id)) {
+        return;
       }
-    } catch (RuntimeException exception) {
-      String message = exception.getMessage();
-      jobs.fail(id, message);
-      logger.warn("Indexing job {} failed ({})", id, exception.getClass().getSimpleName());
+      try {
+        IndexingJob job = jobs.get(id)
+            .orElseThrow(() -> new IllegalStateException("Indexing job disappeared: " + id));
+        if ("REEMBED".equals(job.jobType())) {
+          jobs.updateStage(id, Stage.REINDEXING);
+          jobs.complete(id, ragService.reindexMissingEmbeddings(job.workspaceId(), stage -> jobs.updateStage(id, stage))
+              .chunksEmbedded());
+        } else {
+          String text;
+          if (job.content() != null) {
+            text = job.content();
+          } else {
+            jobs.updateStage(id, S3DocumentReader.isTranscribable(job.objectKey())
+                ? Stage.TRANSCRIBING : Stage.READING);
+            text = ragService.readS3Document(job.objectKey());
+            jobs.saveScreeningText(id, text);
+          }
+          if (job.screenedAt() == null) {
+            jobs.updateStage(id, Stage.SCREENING);
+            DocumentRiskScreening.ScreeningResult result = screening.evaluate(text);
+            String findings;
+            try {
+              findings = objectMapper.writeValueAsString(result.findings());
+            } catch (Exception exception) {
+              throw new IllegalStateException("Could not serialize document screening findings", exception);
+            }
+            jobs.awaitApproval(id, text, findings);
+          } else {
+            if (job.reviewedAt() == null) {
+              throw new IllegalStateException("Indexing job has not been approved");
+            }
+            var result = ragService.indexText(
+                job.source(), text, job.workspaceId(), id, stage -> jobs.updateStage(id, stage));
+            jobs.complete(id, result.documentId(), result.chunks());
+          }
+        }
+      } catch (RuntimeException exception) {
+        String message = exception.getMessage();
+        jobs.fail(id, message);
+        logger.warn("Indexing job {} failed ({})", id, exception.getClass().getSimpleName());
+      }
+    } finally {
+      dispatchTracker.finished(id);
     }
   }
 }

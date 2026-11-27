@@ -1,7 +1,11 @@
 package com.begics.rag.model;
 
 import java.nio.charset.StandardCharsets;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -13,6 +17,8 @@ import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriUtils;
 
@@ -35,15 +41,24 @@ public class InfomaniakAiModels {
   }
 
   @Bean
+  ProviderCallLimiter providerCallLimiter(
+      ObjectProvider<MeterRegistry> meterRegistry, org.springframework.core.env.Environment environment) {
+    int maxConcurrentCalls = environment.getProperty(
+        "rag.provider-limits.max-concurrent-calls", Integer.class, 8);
+    return new ProviderCallLimiter(meterRegistry.getIfAvailable(SimpleMeterRegistry::new), maxConcurrentCalls);
+  }
+
+  @Bean
   EmbeddingModel infomaniakEmbeddingModel(
-      InfomaniakAiProperties properties, ProviderTextRedactor redactor) {
+      InfomaniakAiProperties properties, ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
     org.springframework.ai.embedding.EmbeddingModel model = OpenAiEmbeddingModel.builder()
         .options(embeddingOptions(properties))
         .build();
     return new EmbeddingModel() {
       @Override
       public float[] embed(String text) {
-        return validateEmbeddingDimensions(model.embed(redactor.redact(text)), properties.embeddingDimensions());
+        return limiter.call(ProviderCallLimiter.Operation.EMBEDDING,
+            () -> validateEmbeddingDimensions(model.embed(redactor.redact(text)), properties.embeddingDimensions()));
       }
 
       @Override
@@ -53,46 +68,49 @@ public class InfomaniakAiModels {
 
       @Override
       public java.util.List<float[]> embedAll(java.util.List<String> texts) {
-        return model.embed(texts.stream().map(redactor::redact).toList()).stream()
-            .map(vector -> validateEmbeddingDimensions(vector, properties.embeddingDimensions()))
-            .toList();
+        return limiter.call(ProviderCallLimiter.Operation.EMBEDDING,
+            () -> model.embed(texts.stream().map(redactor::redact).toList()).stream()
+                .map(vector -> validateEmbeddingDimensions(vector, properties.embeddingDimensions()))
+                .toList());
       }
     };
   }
 
   @Bean
   StructuredChatModel infomaniakChatModel(
-      InfomaniakAiProperties properties, ProviderTextRedactor redactor) {
-    return structuredChatModel(properties, properties.chatModel(), redactor);
+      InfomaniakAiProperties properties, ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
+    return structuredChatModel(properties, properties.chatModel(), redactor, limiter);
   }
 
   @Bean
   AgentPlanner infomaniakAgentPlanner(
-      InfomaniakAiProperties properties, ObjectMapper objectMapper, ProviderTextRedactor redactor) {
+      InfomaniakAiProperties properties, ObjectMapper objectMapper, ProviderTextRedactor redactor,
+      ProviderCallLimiter limiter) {
     StructuredChatModel plannerChat =
-        structuredChatModel(properties, properties.agentPlannerModel(), redactor);
+        structuredChatModel(properties, properties.agentPlannerModel(), redactor, limiter);
     return new InfomaniakAgentPlanner(plannerChat, objectMapper);
   }
 
   @Bean
   DocumentRiskScreening infomaniakDocumentRiskScreening(
-      InfomaniakAiProperties properties, ObjectMapper objectMapper, ProviderTextRedactor redactor) {
+      InfomaniakAiProperties properties, ObjectMapper objectMapper, ProviderTextRedactor redactor,
+      ProviderCallLimiter limiter) {
     StructuredChatModel screeningChat =
-        structuredChatModel(properties, properties.agentPlannerModel(), redactor);
+        structuredChatModel(properties, properties.agentPlannerModel(), redactor, limiter);
     return new InfomaniakDocumentRiskScreening(screeningChat, objectMapper, redactor);
   }
 
   private static StructuredChatModel structuredChatModel(
-      InfomaniakAiProperties properties, String modelName, ProviderTextRedactor redactor) {
+      InfomaniakAiProperties properties, String modelName, ProviderTextRedactor redactor,
+      ProviderCallLimiter limiter) {
     org.springframework.ai.chat.model.ChatModel model = OpenAiChatModel.builder()
         .options(chatOptions(properties, modelName))
         .build();
     return new StructuredChatModel() {
       @Override
       public String answer(String question, String context) {
-        String answer = model.call(groundedAnswerPrompt(
-            redactor.redact(question), redactor.redact(context)))
-            .getResult().getOutput().getText();
+        String answer = limiter.call(ProviderCallLimiter.Operation.CHAT, () -> model.call(groundedAnswerPrompt(
+            redactor.redact(question), redactor.redact(context))).getResult().getOutput().getText());
         return redactor.redact(answer);
       }
 
@@ -102,7 +120,8 @@ public class InfomaniakAiModels {
             List.of(new SystemMessage(redactor.redact(instructions)),
                 new UserMessage(redactor.redact(context))),
             structuredOutputOptions(properties, modelName, jsonSchema));
-        String output = model.call(prompt).getResult().getOutput().getText();
+        String output = limiter.call(ProviderCallLimiter.Operation.STRUCTURED_CHAT,
+            () -> model.call(prompt).getResult().getOutput().getText());
         return redactor.redact(output);
       }
     };
@@ -116,13 +135,20 @@ public class InfomaniakAiModels {
   }
 
   @Bean
-  Reranker infomaniakReranker(InfomaniakAiProperties properties, ProviderTextRedactor redactor) {
-    return new InfomaniakReranker(RestClient.builder(), properties, redactor);
+  Reranker infomaniakReranker(
+      RestClient.Builder builder, InfomaniakAiProperties properties,
+      ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
+    return new InfomaniakReranker(builder, properties, redactor, limiter);
   }
 
   @Bean
-  RestClient.Builder infomaniakRestClientBuilder() {
-    return RestClient.builder();
+  RestClient.Builder infomaniakRestClientBuilder(InfomaniakAiProperties properties) {
+    HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(properties.connectTimeout())
+        .build();
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(properties.readTimeout());
+    return RestClient.builder().requestFactory(requestFactory);
   }
 
   static OpenAiEmbeddingOptions embeddingOptions(InfomaniakAiProperties properties) {
@@ -130,6 +156,8 @@ public class InfomaniakAiModels {
         .model(properties.embeddingModel())
         .baseUrl(properties.baseUrl())
         .apiKey(properties.apiKey())
+        .timeout(properties.requestTimeout())
+        .maxRetries(properties.maxRetries())
         .build();
   }
 
@@ -143,6 +171,8 @@ public class InfomaniakAiModels {
         .maxCompletionTokens(properties.maxCompletionTokens())
         .baseUrl(properties.baseUrl())
         .apiKey(properties.apiKey())
+        .timeout(properties.requestTimeout())
+        .maxRetries(properties.maxRetries())
         .build();
   }
 
@@ -152,6 +182,8 @@ public class InfomaniakAiModels {
         .model(modelName)
         .maxCompletionTokens(properties.maxCompletionTokens())
         .outputSchema(jsonSchema)
+        .timeout(properties.requestTimeout())
+        .maxRetries(properties.maxRetries())
         .build();
   }
 
@@ -169,8 +201,22 @@ public class InfomaniakAiModels {
     int dimensions = EmbeddingDimensions.configured(environment);
     int maxCompletionTokens = environment.getProperty(
         "rag.guardrails.max-completion-tokens", Integer.class, 512);
+    int requestTimeoutMs = environment.getProperty(
+        "rag.infomaniak.request-timeout-ms", Integer.class, 60_000);
+    int connectTimeoutMs = environment.getProperty(
+        "rag.infomaniak.connect-timeout-ms", Integer.class, 10_000);
+    int readTimeoutMs = environment.getProperty(
+        "rag.infomaniak.read-timeout-ms", Integer.class, 60_000);
+    int maxRetries = environment.getProperty(
+        "rag.infomaniak.max-retries", Integer.class, 1);
     if (maxCompletionTokens < 1 || maxCompletionTokens > 8192) {
       throw new IllegalStateException("RAG_GUARDRAILS_MAX_COMPLETION_TOKENS must be between 1 and 8192");
+    }
+    if (requestTimeoutMs < 1 || connectTimeoutMs < 1 || readTimeoutMs < 1) {
+      throw new IllegalStateException("Infomaniak request, connect, and read timeouts must be positive");
+    }
+    if (maxRetries < 0 || maxRetries > 5) {
+      throw new IllegalStateException("INFOMANIAK_AI_MAX_RETRIES must be between 0 and 5");
     }
     try {
       int parsedProductId = Integer.parseInt(productId);
@@ -179,7 +225,8 @@ public class InfomaniakAiModels {
       }
       return new InfomaniakAiProperties(
           parsedProductId, apiKey, chatModel, agentPlannerModel, embeddingModel, rerankModel, dimensions,
-          maxCompletionTokens);
+          maxCompletionTokens, Duration.ofMillis(requestTimeoutMs), Duration.ofMillis(connectTimeoutMs),
+          Duration.ofMillis(readTimeoutMs), maxRetries);
     } catch (NumberFormatException exception) {
       throw new IllegalStateException(
           "INFOMANIAK_AI_PRODUCT_ID must be an integer", exception);
@@ -206,7 +253,15 @@ public class InfomaniakAiModels {
 
   record InfomaniakAiProperties(
       int productId, String apiKey, String chatModel, String agentPlannerModel, String embeddingModel,
-      String rerankModel, int embeddingDimensions, int maxCompletionTokens) {
+      String rerankModel, int embeddingDimensions, int maxCompletionTokens, Duration requestTimeout,
+      Duration connectTimeout, Duration readTimeout, int maxRetries) {
+    InfomaniakAiProperties(
+        int productId, String apiKey, String chatModel, String agentPlannerModel, String embeddingModel,
+        String rerankModel, int embeddingDimensions, int maxCompletionTokens) {
+      this(productId, apiKey, chatModel, agentPlannerModel, embeddingModel, rerankModel, embeddingDimensions,
+          maxCompletionTokens, Duration.ofSeconds(60), Duration.ofSeconds(10), Duration.ofSeconds(60), 1);
+    }
+
     String baseUrl() {
       return "https://api.infomaniak.com/2/ai/" + productId + "/openai/v1";
     }

@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import org.junit.jupiter.api.Test;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -40,7 +41,8 @@ class InfomaniakSpeechTranscriptionTest {
         .andExpect(method(HttpMethod.GET))
         .andRespond(withSuccess("The searchable transcript.", MediaType.TEXT_PLAIN));
 
-    var transcription = new InfomaniakSpeechTranscription(builder, PROPERTIES, 1, 1_000);
+    var transcription = new InfomaniakSpeechTranscription(
+        builder, PROPERTIES, 1, 1_000, new ProviderCallLimiter(new SimpleMeterRegistry(), 2));
 
     assertThat(transcription.transcribe("meeting.mp3", new byte[] {'I', 'D', '3'}))
         .isEqualTo("The searchable transcript.");
@@ -56,7 +58,8 @@ class InfomaniakSpeechTranscriptionTest {
     server.expect(requestTo(PROPERTIES.transcriptionResultUrl("batch-123")))
         .andRespond(withSuccess("{\"status\":\"failed\"}", MediaType.APPLICATION_JSON));
 
-    var transcription = new InfomaniakSpeechTranscription(builder, PROPERTIES, 1, 1_000);
+    var transcription = new InfomaniakSpeechTranscription(
+        builder, PROPERTIES, 1, 1_000, new ProviderCallLimiter(new SimpleMeterRegistry(), 2));
 
     assertThatThrownBy(() -> transcription.transcribe("meeting.mp3", new byte[] {'I', 'D', '3'}))
         .hasMessageContaining("transcription failed");

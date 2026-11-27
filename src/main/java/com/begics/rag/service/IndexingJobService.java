@@ -5,7 +5,10 @@ import com.begics.rag.store.IndexingJobStore;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
 import com.begics.rag.storage.S3DocumentReader;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -14,11 +17,21 @@ public class IndexingJobService {
   private final IndexingJobStore jobs;
   private final IndexingJobWorker worker;
   private final S3DocumentReader documents;
+  private final IndexingJobDispatchTracker dispatchTracker;
+  private volatile boolean recoveryComplete;
 
-  public IndexingJobService(IndexingJobStore jobs, IndexingJobWorker worker, S3DocumentReader documents) {
+  @Autowired
+  public IndexingJobService(
+      IndexingJobStore jobs, IndexingJobWorker worker, S3DocumentReader documents,
+      IndexingJobDispatchTracker dispatchTracker) {
     this.jobs = jobs;
     this.worker = worker;
     this.documents = documents;
+    this.dispatchTracker = dispatchTracker;
+  }
+
+  public IndexingJobService(IndexingJobStore jobs, IndexingJobWorker worker, S3DocumentReader documents) {
+    this(jobs, worker, documents, new IndexingJobDispatchTracker());
   }
 
   public ApiModels.IndexingJobResponse enqueueText(ApiModels.IngestRequest request, UUID workspaceId) {
@@ -57,7 +70,7 @@ public class IndexingJobService {
     if (!jobs.approve(id, workspaceId, reviewer)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "This job is not awaiting approval");
     }
-    worker.process(id);
+    schedule(id);
     return get(id, workspaceId);
   }
 
@@ -77,12 +90,56 @@ public class IndexingJobService {
 
   public void recoverPendingJobs() {
     jobs.recoverProcessingJobs();
-    jobs.queuedIds().forEach(worker::process);
+    recoveryComplete = true;
+    dispatchQueuedJobs();
+  }
+
+  @Scheduled(fixedDelay = 1000)
+  public void retryQueuedJobs() {
+    if (recoveryComplete) {
+      dispatchQueuedJobs();
+    }
+  }
+
+  public void dispatchQueuedJobs() {
+    for (UUID id : jobs.queuedIds()) {
+      if (!schedule(id, false)) {
+        break;
+      }
+    }
   }
 
   private ApiModels.IndexingJobResponse enqueue(IndexingJobStore.IndexingJob job) {
-    worker.process(job.id());
+    schedule(job.id());
     return toResponse(job);
+  }
+
+  private void schedule(UUID id) {
+    schedule(id, true);
+  }
+
+  private boolean schedule(UUID id, boolean failOnRejection) {
+    if (!dispatchTracker.trySchedule(id)) {
+      return true;
+    }
+    try {
+      worker.process(id);
+      return true;
+    } catch (RejectedExecutionException exception) {
+      if (!failOnRejection) {
+        dispatchTracker.finished(id);
+        return false;
+      }
+      String message = "Indexing queue is full; retry the request shortly.";
+      try {
+        if (!jobs.failQueued(id, message)) {
+          throw exception;
+        }
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, message, exception);
+      } finally {
+        dispatchTracker.finished(id);
+      }
+    }
   }
 
   private static ApiModels.IndexingJobResponse toResponse(IndexingJobStore.IndexingJob job) {

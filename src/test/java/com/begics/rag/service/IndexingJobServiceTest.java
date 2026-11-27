@@ -10,8 +10,11 @@ import static org.mockito.Mockito.when;
 import com.begics.rag.contract.ApiModels;
 import com.begics.rag.storage.S3DocumentReader;
 import com.begics.rag.store.IndexingJobStore;
+import com.begics.rag.store.IndexingJobStore.IndexingJob;
+import com.begics.rag.store.IndexingJobStore.Stage;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,6 +36,62 @@ class IndexingJobServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .extracting(error -> ((ResponseStatusException) error).getStatusCode())
         .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+
+    verifyNoInteractions(jobs, worker);
+  }
+
+  @Test
+  void marksJobsFailedAndReturnsServiceUnavailableWhenTheWorkerQueueIsFull() {
+    UUID id = UUID.randomUUID();
+    IndexingJob queued = new IndexingJob(
+        id, "notes.txt", null, "content", "QUEUED", Stage.QUEUED, 0, null, "INDEX", workspaceId);
+    when(jobs.create(workspaceId, "notes.txt", null, "content", "owner")).thenReturn(queued);
+    doThrow(new RejectedExecutionException("queue full")).when(worker).process(id);
+    when(jobs.failQueued(id, "Indexing queue is full; retry the request shortly.")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.enqueueText(
+        new ApiModels.IngestRequest("content", "notes.txt"), workspaceId, "owner"))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+
+    verify(jobs).failQueued(id, "Indexing queue is full; retry the request shortly.");
+  }
+
+  @Test
+  void recoveryLeavesQueuedJobsForRetryWhenTheExecutorIsFull() {
+    UUID first = UUID.randomUUID();
+    UUID second = UUID.randomUUID();
+    when(jobs.queuedIds()).thenReturn(java.util.List.of(first, second));
+    doThrow(new RejectedExecutionException("queue full")).when(worker).process(first);
+
+    service.recoverPendingJobs();
+
+    verify(worker).process(first);
+    org.mockito.Mockito.verify(worker, org.mockito.Mockito.never()).process(second);
+    verifyNoInteractions(documents);
+    org.mockito.Mockito.verify(jobs).recoverProcessingJobs();
+    org.mockito.Mockito.verify(jobs, org.mockito.Mockito.never()).failQueued(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void retriesPersistedQueuedJobsAfterTheExecutorHasCapacity() {
+    UUID id = UUID.randomUUID();
+    when(jobs.queuedIds()).thenReturn(java.util.List.of(id));
+    doThrow(new RejectedExecutionException("queue full")).doNothing().when(worker).process(id);
+
+    service.dispatchQueuedJobs();
+    service.dispatchQueuedJobs();
+
+    verify(worker, org.mockito.Mockito.times(2)).process(id);
+    org.mockito.Mockito.verify(jobs, org.mockito.Mockito.never()).failQueued(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void periodicRecoveryWaitsUntilStartupRecoveryIsComplete() {
+    service.retryQueuedJobs();
 
     verifyNoInteractions(jobs, worker);
   }

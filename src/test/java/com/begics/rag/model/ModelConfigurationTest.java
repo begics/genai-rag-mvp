@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import java.time.Duration;
 
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -57,12 +58,16 @@ class ModelConfigurationTest {
           assertThat(chatOptions.getApiKey()).isEqualTo("test-key");
           assertThat(chatOptions.getModel()).isEqualTo("test-chat");
           assertThat(chatOptions.getMaxCompletionTokens()).isEqualTo(512);
+          assertThat(chatOptions.getTimeout()).isEqualTo(Duration.ofSeconds(60));
+          assertThat(chatOptions.getMaxRetries()).isEqualTo(1);
           var embeddingOptions = InfomaniakAiModels.embeddingOptions(properties);
           assertThat(embeddingOptions.getBaseUrl())
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/openai/v1");
           assertThat(embeddingOptions.getApiKey()).isEqualTo("test-key");
           assertThat(embeddingOptions.getModel()).isEqualTo("test-embedding");
           assertThat(embeddingOptions.getDimensions()).isNull();
+          assertThat(embeddingOptions.getTimeout()).isEqualTo(Duration.ofSeconds(60));
+          assertThat(embeddingOptions.getMaxRetries()).isEqualTo(1);
           assertThat(properties.rerankModel()).isEqualTo("test-reranker");
           assertThat(properties.rerankUrl())
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/cohere/v2/rerank");
@@ -73,6 +78,31 @@ class ModelConfigurationTest {
               .isEqualTo("google/gemma-4-31B-it");
           assertThat(InfomaniakAiModels.validateEmbeddingDimensions(new float[768], 768)).hasSize(768);
         });
+  }
+
+  @Test
+  void configuresProviderTimeoutsRetriesAndConcurrencyLimit() {
+    contextRunner.withPropertyValues(
+        "rag.provider=infomaniak",
+        "rag.infomaniak.product-id=12345",
+        "rag.infomaniak.api-key=test-key",
+        "rag.infomaniak.chat-model=test-chat",
+        "rag.infomaniak.embedding-model=test-embedding",
+        "rag.infomaniak.rerank-model=test-reranker",
+        "rag.infomaniak.request-timeout-ms=25000",
+        "rag.infomaniak.connect-timeout-ms=3000",
+        "rag.infomaniak.read-timeout-ms=20000",
+        "rag.infomaniak.max-retries=0",
+        "rag.provider-limits.max-concurrent-calls=2").run(context -> {
+          assertThat(context).hasNotFailed();
+          var properties = context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);
+          assertThat(properties.requestTimeout()).isEqualTo(Duration.ofSeconds(25));
+          assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(3));
+          assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(20));
+          assertThat(properties.maxRetries()).isZero();
+          assertThat(InfomaniakAiModels.chatOptions(properties).getTimeout()).isEqualTo(Duration.ofSeconds(25));
+          assertThat(context.getBean(ProviderCallLimiter.class).maxConcurrentCalls()).isEqualTo(2);
+      });
   }
 
   @Test

@@ -187,6 +187,15 @@ public class IndexingJobStore {
         """, safeMessage(message), id);
   }
 
+  public boolean failQueued(UUID id, String message) {
+    return jdbc.update("""
+        update indexing_jobs
+           set status = 'FAILED', stage = 'FAILED', error_message = ?,
+               object_key = null, content = null, updated_at = now()
+         where id = ? and status = 'QUEUED'
+        """, safeMessage(message), id) == 1;
+  }
+
   private static String safeMessage(String message) {
     if (message == null || message.isBlank()) {
       return "Indexing failed; check application logs.";

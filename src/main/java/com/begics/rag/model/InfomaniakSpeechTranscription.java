@@ -23,12 +23,14 @@ public class InfomaniakSpeechTranscription implements SpeechTranscription {
   private final InfomaniakAiModels.InfomaniakAiProperties properties;
   private final Duration pollInterval;
   private final Duration timeout;
+  private final ProviderCallLimiter limiter;
 
   public InfomaniakSpeechTranscription(
       RestClient.Builder builder,
       InfomaniakAiModels.InfomaniakAiProperties properties,
       @Value("${rag.infomaniak.transcription.poll-interval-ms:2000}") long pollIntervalMs,
-      @Value("${rag.infomaniak.transcription.timeout-ms:300000}") long timeoutMs) {
+      @Value("${rag.infomaniak.transcription.timeout-ms:300000}") long timeoutMs,
+      ProviderCallLimiter limiter) {
     if (pollIntervalMs <= 0 || timeoutMs <= 0) {
       throw new IllegalArgumentException("Whisper polling interval and timeout must be positive");
     }
@@ -36,6 +38,7 @@ public class InfomaniakSpeechTranscription implements SpeechTranscription {
     this.properties = properties;
     this.pollInterval = Duration.ofMillis(pollIntervalMs);
     this.timeout = Duration.ofMillis(timeoutMs);
+    this.limiter = limiter;
   }
 
   @Override
@@ -73,13 +76,14 @@ public class InfomaniakSpeechTranscription implements SpeechTranscription {
     form.add("file", file);
     form.add("model", MODEL);
     form.add("response_format", "text");
-    TranscriptionSubmission response = restClient.post()
+    TranscriptionSubmission response = limiter.call(ProviderCallLimiter.Operation.TRANSCRIPTION_SUBMIT,
+        () -> restClient.post()
         .uri(properties.transcriptionUrl())
         .header("Authorization", "Bearer " + properties.apiKey())
         .contentType(MediaType.MULTIPART_FORM_DATA)
         .body(form)
         .retrieve()
-        .body(TranscriptionSubmission.class);
+        .body(TranscriptionSubmission.class));
     if (response == null || response.batchId() == null || response.batchId().isBlank()) {
       throw new IllegalStateException("Infomaniak did not return a Whisper batch ID");
     }
@@ -89,11 +93,12 @@ public class InfomaniakSpeechTranscription implements SpeechTranscription {
   private void awaitCompletion(String batchId) {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (true) {
-      TranscriptionStatus status = restClient.get()
-          .uri(properties.transcriptionResultUrl(batchId))
-          .header("Authorization", "Bearer " + properties.apiKey())
-          .retrieve()
-          .body(TranscriptionStatus.class);
+      TranscriptionStatus status = limiter.call(ProviderCallLimiter.Operation.TRANSCRIPTION_POLL,
+          () -> restClient.get()
+              .uri(properties.transcriptionResultUrl(batchId))
+              .header("Authorization", "Bearer " + properties.apiKey())
+              .retrieve()
+              .body(TranscriptionStatus.class));
       if (status == null || status.status() == null) {
         throw new IllegalStateException("Infomaniak returned an invalid Whisper batch status");
       }
@@ -124,11 +129,12 @@ public class InfomaniakSpeechTranscription implements SpeechTranscription {
   }
 
   private String download(String batchId) {
-    return restClient.get()
-        .uri(properties.transcriptionDownloadUrl(batchId))
-        .header("Authorization", "Bearer " + properties.apiKey())
-        .retrieve()
-        .body(String.class);
+    return limiter.call(ProviderCallLimiter.Operation.TRANSCRIPTION_DOWNLOAD,
+        () -> restClient.get()
+            .uri(properties.transcriptionDownloadUrl(batchId))
+            .header("Authorization", "Bearer " + properties.apiKey())
+            .retrieve()
+            .body(String.class));
   }
 
   private record TranscriptionSubmission(

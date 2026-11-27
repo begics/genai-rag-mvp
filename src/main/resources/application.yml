@@ -53,11 +53,13 @@ app.antivirus:
   host: ${CLAMAV_HOST:localhost}
   port: ${CLAMAV_PORT:3310}
   timeout-ms: ${CLAMAV_TIMEOUT_MS:30000}
-management.endpoints.web.exposure.include: health,info
+management.endpoints.web.exposure.include: health,info,metrics
 management.endpoint.health.probes.enabled: true
 server.forward-headers-strategy: framework
 rag:
   provider: ${RAG_PROVIDER:offline}
+  provider-limits:
+    max-concurrent-calls: ${RAG_PROVIDER_MAX_CONCURRENT_CALLS:8}
   embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
   guardrails:
     denied-topics: ${RAG_GUARDRAILS_DENIED_TOPICS:}
@@ -69,6 +71,10 @@ rag:
     agent-planner-model: ${INFOMANIAK_AI_AGENT_PLANNER_MODEL:google/gemma-4-31B-it}
     embedding-model: ${INFOMANIAK_AI_EMBEDDING_MODEL:}
     rerank-model: ${INFOMANIAK_AI_RERANK_MODEL:}
+    request-timeout-ms: ${INFOMANIAK_AI_REQUEST_TIMEOUT_MS:60000}
+    connect-timeout-ms: ${INFOMANIAK_AI_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${INFOMANIAK_AI_READ_TIMEOUT_MS:60000}
+    max-retries: ${INFOMANIAK_AI_MAX_RETRIES:1}
     transcription:
       poll-interval-ms: ${INFOMANIAK_AI_TRANSCRIPTION_POLL_INTERVAL_MS:2000}
       timeout-ms: ${INFOMANIAK_AI_TRANSCRIPTION_TIMEOUT_MS:300000}

@@ -10,13 +10,15 @@ final class InfomaniakReranker implements Reranker {
   private final RestClient restClient;
   private final InfomaniakAiModels.InfomaniakAiProperties properties;
   private final ProviderTextRedactor redactor;
+  private final ProviderCallLimiter limiter;
 
   InfomaniakReranker(
       RestClient.Builder restClientBuilder, InfomaniakAiModels.InfomaniakAiProperties properties,
-      ProviderTextRedactor redactor) {
+      ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
     this.restClient = restClientBuilder.build();
     this.properties = properties;
     this.redactor = redactor;
+    this.limiter = limiter;
   }
 
   @Override
@@ -24,7 +26,7 @@ final class InfomaniakReranker implements Reranker {
     if (candidates.isEmpty() || limit <= 0) {
       return List.of();
     }
-    RerankResponse response = restClient.post()
+    RerankResponse response = limiter.call(ProviderCallLimiter.Operation.RERANK, () -> restClient.post()
         .uri(properties.rerankUrl())
         .contentType(MediaType.APPLICATION_JSON)
         .header("Authorization", "Bearer " + properties.apiKey())
@@ -32,7 +34,7 @@ final class InfomaniakReranker implements Reranker {
             candidates.stream().map(candidate -> redactor.redact(candidate.content())).toList(),
             properties.rerankModel(), limit))
         .retrieve()
-        .body(RerankResponse.class);
+        .body(RerankResponse.class));
     if (response == null || response.results() == null) {
       throw new IllegalStateException("Infomaniak returned an empty reranking response");
     }
