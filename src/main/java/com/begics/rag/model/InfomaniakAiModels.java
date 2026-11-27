@@ -142,10 +142,20 @@ public class InfomaniakAiModels {
   }
 
   @Bean
-  RestClient.Builder infomaniakRestClientBuilder(InfomaniakAiProperties properties) {
-    HttpClient httpClient = HttpClient.newBuilder()
+  HttpClient infomaniakHttpClient(InfomaniakAiProperties properties) {
+    return HttpClient.newBuilder()
         .connectTimeout(properties.connectTimeout())
         .build();
+  }
+
+  @Bean
+  InfomaniakRestClientFactory infomaniakRestClientFactory(
+      RestClient.Builder builder, InfomaniakAiProperties properties, HttpClient httpClient) {
+    return new InfomaniakRestClientFactory(builder, httpClient, properties.readTimeout());
+  }
+
+  @Bean
+  RestClient.Builder infomaniakRestClientBuilder(InfomaniakAiProperties properties, HttpClient httpClient) {
     JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
     requestFactory.setReadTimeout(properties.readTimeout());
     return RestClient.builder().requestFactory(requestFactory);

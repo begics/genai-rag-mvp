@@ -76,9 +76,21 @@ public class IndexingJobStore {
         """, Boolean.class, workspaceId, objectKey));
   }
 
-  public List<UUID> queuedIds() {
-    return jdbc.query("select id from indexing_jobs where status = 'QUEUED' order by created_at",
-        (rs, row) -> rs.getObject(1, UUID.class));
+  public List<UUID> queuedPage(List<UUID> excludedIds, int limit) {
+    if (excludedIds == null || limit < 1) {
+      throw new IllegalArgumentException("Queued-job exclusions must be provided and page size must be positive");
+    }
+    StringBuilder sql = new StringBuilder("select id from indexing_jobs where status = 'QUEUED' ");
+    List<Object> parameters = new java.util.ArrayList<>();
+    if (!excludedIds.isEmpty()) {
+      sql.append("and id not in (")
+          .append(String.join(",", java.util.Collections.nCopies(excludedIds.size(), "?")))
+          .append(") ");
+      parameters.addAll(excludedIds);
+    }
+    sql.append("order by created_at, id limit ?");
+    parameters.add(limit);
+    return jdbc.query(sql.toString(), (rs, row) -> rs.getObject(1, UUID.class), parameters.toArray());
   }
 
   public void recoverProcessingJobs() {

@@ -52,6 +52,7 @@ class JdbcDocumentStoreIntegrationTest {
         .migrate();
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
     jdbc.execute("truncate table documents cascade");
+    jdbc.execute("truncate table indexing_jobs");
     store = new JdbcDocumentStore(jdbc);
   }
 
@@ -409,6 +410,29 @@ class JdbcDocumentStoreIntegrationTest {
     var failedJob = jobs.get(failed.id()).orElseThrow();
     assertThat(failedJob.status()).isEqualTo("FAILED");
     assertThat(failedJob.stage()).isEqualTo(IndexingJobStore.Stage.CHUNKING);
+  }
+
+  @Test
+  void pagesQueuedJobsWithoutReturningAlreadyScheduledIds() {
+    IndexingJobStore jobs = new IndexingJobStore(jdbc());
+    List<IndexingJob> created = List.of(
+        jobs.create(JdbcDocumentStore.LEGACY_WORKSPACE_ID, "page-a.txt", null, "content"),
+        jobs.create(JdbcDocumentStore.LEGACY_WORKSPACE_ID, "page-b.txt", null, "content"),
+        jobs.create(JdbcDocumentStore.LEGACY_WORKSPACE_ID, "page-c.txt", null, "content"));
+
+    var firstPage = jobs.queuedPage(List.of(), 2);
+    var secondPage = jobs.queuedPage(firstPage, 2);
+
+    assertThat(firstPage).hasSize(2);
+    assertThat(secondPage).hasSize(1);
+    var allPageIds = java.util.stream.Stream.concat(firstPage.stream(), secondPage.stream()).toList();
+    assertThat(allPageIds)
+        .containsExactlyInAnyOrderElementsOf(created.stream().map(IndexingJob::id).toList());
+    assertThat(jobs.queuedPage(allPageIds, 2)).isEmpty();
+    assertThatThrownBy(() -> jobs.queuedPage(null, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> jobs.queuedPage(List.of(), 0))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

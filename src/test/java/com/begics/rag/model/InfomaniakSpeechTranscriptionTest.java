@@ -10,6 +10,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import org.junit.jupiter.api.Test;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -63,6 +66,30 @@ class InfomaniakSpeechTranscriptionTest {
 
     assertThatThrownBy(() -> transcription.transcribe("meeting.mp3", new byte[] {'I', 'D', '3'}))
         .hasMessageContaining("transcription failed");
+    server.verify();
+  }
+
+  @Test
+  void boundsEachWhisperRequestByTheRemainingOverallDeadline() {
+    RestClient.Builder builder = RestClient.builder();
+    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+    server.expect(requestTo(PROPERTIES.transcriptionUrl()))
+        .andRespond(withSuccess("{\"batch_id\":\"batch-123\"}", MediaType.APPLICATION_JSON));
+    server.expect(requestTo(PROPERTIES.transcriptionResultUrl("batch-123")))
+        .andRespond(withSuccess("{\"status\":\"processing\"}", MediaType.APPLICATION_JSON));
+    List<Duration> requestTimeouts = new ArrayList<>();
+    var transcription = new InfomaniakSpeechTranscription(
+        PROPERTIES, 500, 500, new ProviderCallLimiter(new SimpleMeterRegistry(), 2), timeout -> {
+          requestTimeouts.add(timeout);
+          return builder.build();
+        });
+
+    assertThatThrownBy(() -> transcription.transcribe("meeting.mp3", new byte[] {'I', 'D', '3'}))
+        .hasMessageContaining("Timed out waiting");
+
+    assertThat(requestTimeouts).hasSize(2);
+    assertThat(requestTimeouts.get(0)).isLessThanOrEqualTo(Duration.ofMillis(500));
+    assertThat(requestTimeouts.get(1)).isLessThan(requestTimeouts.get(0));
     server.verify();
   }
 }

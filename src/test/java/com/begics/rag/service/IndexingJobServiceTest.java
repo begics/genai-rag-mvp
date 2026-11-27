@@ -1,6 +1,8 @@
 package com.begics.rag.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +16,13 @@ import com.begics.rag.store.IndexingJobStore.IndexingJob;
 import com.begics.rag.store.IndexingJobStore.Stage;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -62,7 +71,7 @@ class IndexingJobServiceTest {
   void recoveryLeavesQueuedJobsForRetryWhenTheExecutorIsFull() {
     UUID first = UUID.randomUUID();
     UUID second = UUID.randomUUID();
-    when(jobs.queuedIds()).thenReturn(java.util.List.of(first, second));
+    when(jobs.queuedPage(List.of(), 100)).thenReturn(List.of(first, second));
     doThrow(new RejectedExecutionException("queue full")).when(worker).process(first);
 
     service.recoverPendingJobs();
@@ -78,7 +87,7 @@ class IndexingJobServiceTest {
   @Test
   void retriesPersistedQueuedJobsAfterTheExecutorHasCapacity() {
     UUID id = UUID.randomUUID();
-    when(jobs.queuedIds()).thenReturn(java.util.List.of(id));
+    when(jobs.queuedPage(List.of(), 100)).thenReturn(List.of(id));
     doThrow(new RejectedExecutionException("queue full")).doNothing().when(worker).process(id);
 
     service.dispatchQueuedJobs();
@@ -94,6 +103,89 @@ class IndexingJobServiceTest {
     service.retryQueuedJobs();
 
     verifyNoInteractions(jobs, worker);
+  }
+
+  @Test
+  void dispatchesPersistedJobsInBoundedExcludedIdPages() {
+    List<UUID> firstPage = new ArrayList<>();
+    for (int i = 0; i < 100; i++) {
+      firstPage.add(UUID.randomUUID());
+    }
+    UUID nextId = UUID.randomUUID();
+    when(jobs.queuedPage(List.of(), 100)).thenReturn(firstPage);
+    when(jobs.queuedPage(org.mockito.ArgumentMatchers.argThat(ids -> ids.size() == 100), org.mockito.ArgumentMatchers.eq(100)))
+        .thenReturn(List.of(nextId));
+    service.dispatchQueuedJobs();
+
+    org.mockito.Mockito.verify(jobs).queuedPage(List.of(), 100);
+    org.mockito.Mockito.verify(jobs).queuedPage(
+        org.mockito.ArgumentMatchers.argThat(ids -> ids.size() == 100),
+        org.mockito.ArgumentMatchers.eq(100));
+    org.mockito.Mockito.verify(worker, org.mockito.Mockito.times(101)).process(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void apiSubmissionRetriesAfterAConcurrentRecoveryDispatchIsRejected() throws Exception {
+    UUID id = UUID.randomUUID();
+    IndexingJob queued = new IndexingJob(
+        id, "notes.txt", null, "content", "QUEUED", Stage.QUEUED, 0, null, "INDEX", workspaceId);
+    when(jobs.queuedPage(List.of(), 100)).thenReturn(List.of(id));
+    CountDownLatch recoverySubmissionStarted = new CountDownLatch(1);
+    CountDownLatch releaseRecoverySubmission = new CountDownLatch(1);
+    CountDownLatch jobCreated = new CountDownLatch(1);
+    AtomicInteger submissions = new AtomicInteger();
+    AtomicReference<Throwable> requestFailure = new AtomicReference<>();
+    when(jobs.create(workspaceId, "notes.txt", null, "content", "owner")).thenAnswer(invocation -> {
+      jobCreated.countDown();
+      return queued;
+    });
+    doAnswer(invocation -> {
+      if (submissions.incrementAndGet() == 1) {
+        recoverySubmissionStarted.countDown();
+        if (!releaseRecoverySubmission.await(5, TimeUnit.SECONDS)) {
+          throw new AssertionError("Timed out waiting to release recovery submission");
+        }
+      }
+      throw new RejectedExecutionException("queue full");
+    }).when(worker).process(id);
+    when(jobs.failQueued(id, "Indexing queue is full; retry the request shortly.")).thenReturn(true);
+
+    IndexingJobService concurrentService =
+        new IndexingJobService(jobs, worker, documents, new IndexingJobDispatchTracker());
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      var recovery = executor.submit(concurrentService::dispatchQueuedJobs);
+      assertThat(recoverySubmissionStarted.await(5, TimeUnit.SECONDS)).isTrue();
+      Thread request = new Thread(() -> {
+        try {
+          concurrentService.enqueueText(
+              new ApiModels.IngestRequest("content", "notes.txt"), workspaceId, "owner");
+        } catch (Throwable exception) {
+          requestFailure.set(exception);
+        }
+      });
+      request.start();
+      assertThat(jobCreated.await(5, TimeUnit.SECONDS)).isTrue();
+      long blockedDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      while (request.getState() != Thread.State.BLOCKED && System.nanoTime() < blockedDeadline) {
+        Thread.yield();
+      }
+      assertThat(request.getState()).isEqualTo(Thread.State.BLOCKED);
+      releaseRecoverySubmission.countDown();
+      recovery.get(5, TimeUnit.SECONDS);
+      request.join(TimeUnit.SECONDS.toMillis(5));
+
+      assertThat(request.isAlive()).isFalse();
+      assertThat(requestFailure.get())
+          .isInstanceOf(ResponseStatusException.class)
+          .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+          .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+      org.mockito.Mockito.verify(worker, org.mockito.Mockito.times(2)).process(id);
+      verify(jobs).failQueued(id, "Indexing queue is full; retry the request shortly.");
+    } finally {
+      releaseRecoverySubmission.countDown();
+      executor.shutdownNow();
+    }
   }
 
   @Test

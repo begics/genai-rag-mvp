@@ -14,6 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class IndexingJobService {
+  private static final int DISPATCH_PAGE_SIZE = 100;
+
   private final IndexingJobStore jobs;
   private final IndexingJobWorker worker;
   private final S3DocumentReader documents;
@@ -102,9 +104,15 @@ public class IndexingJobService {
   }
 
   public void dispatchQueuedJobs() {
-    for (UUID id : jobs.queuedIds()) {
-      if (!schedule(id, false)) {
-        break;
+    while (true) {
+      var page = jobs.queuedPage(dispatchTracker.scheduledIds(), DISPATCH_PAGE_SIZE);
+      for (UUID id : page) {
+        if (!schedule(id, false)) {
+          return;
+        }
+      }
+      if (page.size() < DISPATCH_PAGE_SIZE) {
+        return;
       }
     }
   }
@@ -119,27 +127,21 @@ public class IndexingJobService {
   }
 
   private boolean schedule(UUID id, boolean failOnRejection) {
-    if (!dispatchTracker.trySchedule(id)) {
-      return true;
-    }
-    try {
-      worker.process(id);
-      return true;
-    } catch (RejectedExecutionException exception) {
-      if (!failOnRejection) {
-        dispatchTracker.finished(id);
-        return false;
-      }
-      String message = "Indexing queue is full; retry the request shortly.";
+    return dispatchTracker.dispatch(id, () -> {
       try {
+        worker.process(id);
+        return true;
+      } catch (RejectedExecutionException exception) {
+        if (!failOnRejection) {
+          return false;
+        }
+        String message = "Indexing queue is full; retry the request shortly.";
         if (!jobs.failQueued(id, message)) {
           throw exception;
         }
         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, message, exception);
-      } finally {
-        dispatchTracker.finished(id);
       }
-    }
+    });
   }
 
   private static ApiModels.IndexingJobResponse toResponse(IndexingJobStore.IndexingJob job) {
