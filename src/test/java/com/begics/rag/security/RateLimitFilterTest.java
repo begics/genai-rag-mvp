@@ -72,6 +72,26 @@ class RateLimitFilterTest {
   }
 
   @Test
+  void keepsIndexingJobReadsAndSubmissionsInSeparateLimitBuckets() throws Exception {
+    RateLimitFilter filter = new RateLimitFilter(
+        Clock.fixed(Instant.parse("2026-11-25T18:00:00Z"), ZoneOffset.UTC));
+    FilterChain chain = mock(FilterChain.class);
+
+    for (int i = 0; i < 20; i++) {
+      MockHttpServletRequest read = new MockHttpServletRequest("GET", "/api/indexing-jobs");
+      read.setRemoteAddr("192.0.2.1");
+      filter.doFilter(read, new MockHttpServletResponse(), chain);
+    }
+
+    MockHttpServletResponse submission = new MockHttpServletResponse();
+    filter.doFilter(request("/api/indexing-jobs", "192.0.2.1"), submission, chain);
+
+    assertThat(submission.getStatus()).isEqualTo(200);
+    verify(chain, times(21)).doFilter(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
   void enforcesGlobalLimitEvenWhenRequestsUseDifferentPaths() throws Exception {
     RateLimitFilter filter = new RateLimitFilter(
         Clock.fixed(Instant.parse("2026-11-25T18:00:00Z"), ZoneOffset.UTC));

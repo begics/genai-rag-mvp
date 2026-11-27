@@ -39,7 +39,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
     String client = request.getRemoteAddr();
     if (!allow(client + ":all", windowStart, GLOBAL_LIMIT)
-        || (limit > 0 && !allow(client + ':' + request.getRequestURI(), windowStart, limit))) {
+        || (limit > 0 && !allow(
+            client + ':' + request.getMethod().toUpperCase(java.util.Locale.ROOT)
+                + ':' + request.getRequestURI(),
+            windowStart, limit))) {
       response.setHeader("Retry-After", Long.toString(Math.max(
           1, (windowStart + WINDOW_MILLIS - now + 999) / 1000)));
       response.sendError(HttpStatus.TOO_MANY_REQUESTS.value(), "Too many requests; try again shortly.");
