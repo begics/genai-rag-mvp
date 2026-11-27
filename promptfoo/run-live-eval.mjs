@@ -5,7 +5,12 @@ import path from 'node:path';
 import { RagSession } from './rag-session.mjs';
 
 const hsluMode = process.argv.includes('--hslu');
+const agentMode = process.argv.includes('--agent');
 const hsluRepoPath = process.env.HSLU_REPO_PATH;
+
+if (hsluMode && agentMode) {
+  throw new Error('The HSLU and agent evaluations must be run separately.');
+}
 
 function loadDotEnv(contents) {
   const values = {};
@@ -50,6 +55,39 @@ async function loadHsluEvaluationSource() {
   };
 }
 
+async function uploadAndIndexText(session, workspaceId, source, text, onUploaded) {
+  const csrf = await session.get('/api/csrf');
+  const form = new FormData();
+  form.set('file', new Blob([text], { type: 'text/plain' }), source);
+  const uploadResponse = await session.fetch(new URL('/api/uploads', session.appUrl), {
+    method: 'POST',
+    headers: {
+      'X-XSRF-TOKEN': csrf.token,
+      'X-Workspace-ID': workspaceId,
+    },
+    body: form,
+  });
+  const uploaded = await session.json(uploadResponse);
+  onUploaded(uploaded.key);
+
+  const jobCsrf = await session.get('/api/csrf');
+  const job = await session.post('/api/indexing-jobs/s3', { key: uploaded.key }, {
+    'X-XSRF-TOKEN': jobCsrf.token,
+    'X-Workspace-ID': workspaceId,
+  });
+  for (let attempt = 0; attempt < 90; attempt++) {
+    const status = await session.get(`/api/indexing-jobs/${job.id}`, {
+      'X-Workspace-ID': workspaceId,
+    });
+    if (status.status === 'COMPLETED') return uploaded.key;
+    if (status.status === 'FAILED') {
+      throw new Error(`Synthetic S3 indexing failed for ${source}; provider error details are omitted.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`Synthetic S3 indexing timed out for ${source}.`);
+}
+
 const env = loadDotEnv(await readFile('.env', 'utf8'));
 const required = [
   'KEYCLOAK_ADMIN_PASSWORD',
@@ -75,9 +113,11 @@ Object.assign(process.env, env, {
 const workspaceName = `Promptfoo live eval ${randomUUID()}`;
 let workspaceId;
 let cleanupError;
+let session;
+const uploadedKeys = [];
 
 try {
-  const session = new RagSession();
+  session = new RagSession();
   await session.login();
   const workspace = await session.createWorkspace(workspaceName);
   if (!/^[0-9a-f-]{36}$/i.test(workspace.id || '')) {
@@ -91,19 +131,46 @@ try {
     : [
         {
           source: 'promptfoo-observatory.txt',
-          text: 'The Alpine observatory test marker is ORBIT-731.',
+          text: 'The Alpine observatory test marker is ORBIT-731. The project start month is April.',
         },
         {
           source: 'promptfoo-calibration.txt',
           text: 'The telescope calibration interval is exactly 17 days.',
         },
+        ...(agentMode
+          ? [
+              {
+                source: 'promptfoo-observatory-operations.txt',
+                text: await readFile('promptfoo/fixtures/synthetic-planner-seed.txt', 'utf8'),
+              },
+              {
+                source: 'leave-policy-2025.txt',
+                text: 'Leave requests must be submitted at least 10 calendar days in advance. Managers approve all leave requests.',
+                s3: true,
+              },
+              {
+                source: 'leave-policy-2026.txt',
+                text: 'Leave requests must be submitted at least 5 calendar days in advance. Managers approve all leave requests.',
+                s3: true,
+              },
+            ]
+          : []),
       ];
   for (const source of sources) {
-    await session.indexText(workspaceId, source.source, source.text);
+    if (source.s3) {
+      await uploadAndIndexText(
+        session, workspaceId, source.source, source.text, (key) => uploadedKeys.push(key));
+    } else {
+      await session.indexText(workspaceId, source.source, source.text);
+    }
   }
 
   const promptfoo = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const config = hsluMode ? 'promptfoo-hslu.yaml' : 'promptfoo.yaml';
+  const config = hsluMode
+    ? 'promptfoo-hslu.yaml'
+    : agentMode
+      ? 'promptfoo-agent.yaml'
+      : 'promptfoo.yaml';
   const result = spawnSync(promptfoo, [
     'promptfoo', 'eval', '--config', config, '--no-cache', '--no-share', '--no-write',
   ], {
@@ -114,6 +181,26 @@ try {
   if (result.status !== 0) process.exitCode = result.status || 1;
 } finally {
   if (workspaceId) {
+    for (const key of uploadedKeys) {
+      try {
+        const csrf = await session.get('/api/csrf');
+        const response = await session.fetch(
+          new URL(`/api/uploads?${new URLSearchParams({ key })}`, session.appUrl),
+          {
+            method: 'DELETE',
+            headers: {
+              'X-XSRF-TOKEN': csrf.token,
+              'X-Workspace-ID': workspaceId,
+            },
+          },
+        );
+        if (response.status !== 204) {
+          throw new Error(`Could not delete a synthetic uploaded object (HTTP ${response.status}).`);
+        }
+      } catch (error) {
+        cleanupError = error;
+      }
+    }
     try {
       runPsql([
         'BEGIN;',
@@ -122,7 +209,7 @@ try {
         `DELETE FROM workspaces WHERE id = '${workspaceId}'::uuid AND name = '${workspaceName}';`,
         'COMMIT;',
       ].join('\n'));
-      console.log('Removed the temporary Promptfoo workspace and its test data.');
+      console.log('Removed temporary Promptfoo workspace records.');
     } catch (error) {
       cleanupError = error;
     }

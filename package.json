@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "eval:rag:live": "node promptfoo/run-live-eval.mjs",
-    "eval:rag:hslu": "node promptfoo/run-live-eval.mjs --hslu"
+    "eval:rag:hslu": "node promptfoo/run-live-eval.mjs --hslu",
+    "eval:agent:live": "node promptfoo/run-live-eval.mjs --agent"
   },
   "devDependencies": {
     "promptfoo": "0.126.0",

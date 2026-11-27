@@ -1,0 +1,106 @@
+description: Live evaluation of the local Infomaniak-backed agentic RAG application
+
+prompts:
+  - "{{question}}"
+
+providers:
+  - id: file://promptfoo/agent-provider.mjs
+
+tests:
+  - description: Retrieves a synthetic fact and cites its source
+    vars:
+      question: "What is the Alpine observatory test marker?"
+    assert:
+      - type: javascript
+        value: "output.includes('ORBIT-731')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory.txt')"
+      - type: javascript
+        value: "(context.metadata?.steps ?? []).filter((step) => step.tool === 'workspace-search' && step.status === 'completed').length >= 1"
+
+  - description: Abstains when the synthetic workspace lacks the requested fact
+    vars:
+      question: "Which city hosted the 1988 lunar observatory convention?"
+    assert:
+      - type: javascript
+        value: "/does not contain information|could not find|not (?:available|provided|given) in (?:the )?(?:context|sources)|don't know|cannot determine/i.test(output)"
+      - type: javascript
+        value: "!(context.metadata?.sources ?? []).some((source) => /1988|convention/i.test(source.excerpt ?? ''))"
+
+  - description: Does not compare documents for a normal factual question
+    vars:
+      question: "How often is the telescope calibration performed?"
+    assert:
+      - type: javascript
+        value: "output.includes('17')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-calibration.txt')"
+      - type: javascript
+        value: "context.metadata?.steps?.some((step) => step.tool === 'document-compare' && step.status === 'not-needed')"
+
+  - description: Selects and compares the two policy versions when explicitly asked
+    vars:
+      question: "Compare the required advance notice in the two leave policies."
+    assert:
+      - type: javascript
+        value: "context.metadata?.comparison?.firstFilename === 'leave-policy-2025.txt'"
+      - type: javascript
+        value: "context.metadata?.comparison?.secondFilename === 'leave-policy-2026.txt'"
+      - type: javascript
+        value: "context.metadata?.comparison?.removedParagraphs?.some((paragraph) => paragraph.includes('10 calendar days'))"
+      - type: javascript
+        value: "context.metadata?.comparison?.addedParagraphs?.some((paragraph) => paragraph.includes('5 calendar days'))"
+
+  - description: Retrieves a synthetic maintenance interval and cites its source
+    vars:
+      question: "How often does the North Dome observatory test its Asterion telescope lens?"
+    assert:
+      - type: javascript
+        value: "output.includes('17 days')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"
+
+  - description: Retrieves a synthetic equipment location and cites its source
+    vars:
+      question: "Where does the technician record completed lens tests for the Asterion telescope?"
+    assert:
+      - type: javascript
+        value: "output.toLowerCase().includes('blue maintenance ledger')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"
+
+  - description: Retrieves synthetic equipment dimensions and storage location
+    vars:
+      question: "What is the size of the calibration plate used by the Asterion telescope, and where is it stored?"
+    assert:
+      - type: javascript
+        value: "output.includes('12-centimeter') && output.includes('C-14')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"
+
+  - description: Retrieves synthetic visitor gallery days and hours
+    vars:
+      question: "What are the operating hours and days for the visitor gallery?"
+    assert:
+      - type: javascript
+        value: "output.includes('09:30') && output.includes('16:45') && /Monday through Saturday|Monday to Saturday/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"
+
+  - description: Answers a synthetic multi-fact equipment question with its source
+    vars:
+      question: "What is the name of the backup projector, where is it located, and what is its test image?"
+    assert:
+      - type: javascript
+        value: "output.includes('Lumen-3') && output.includes('B-2') && output.toLowerCase().includes('purple spiral')"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"
+
+  - description: Retrieves a synthetic conditional rule and cites its source
+    vars:
+      question: "Under what weather condition does the outdoor viewing deck close, and does this affect the indoor visitor gallery?"
+    assert:
+      - type: javascript
+        value: "output.includes('40 kilometers per hour') && /gallery.{0,80}remains? open|remains? open.{0,80}gallery/i.test(output)"
+      - type: javascript
+        value: "context.metadata?.sources?.some((source) => source.source === 'promptfoo-observatory-operations.txt')"

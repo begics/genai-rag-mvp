@@ -1,0 +1,44 @@
+{
+  "generator": "Meta Synthetic Data Kit",
+  "model": "google/gemma-4-31B-it",
+  "source": "synthetic-planner-seed.txt",
+  "review": "Generated QA pairs manually checked against the synthetic source text.",
+  "qa_pairs": [
+    {
+      "question": "How often does the North Dome observatory test its Asterion telescope lens?",
+      "answer": "The North Dome observatory tests its Asterion telescope lens every 17 days.",
+      "expectedAnswerContains": "17 days",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    },
+    {
+      "question": "Where does the technician record completed lens tests for the Asterion telescope?",
+      "answer": "Completed lens tests are recorded in the blue maintenance ledger.",
+      "expectedAnswerContains": "blue maintenance ledger",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    },
+    {
+      "question": "What is the size of the calibration plate used by the Asterion telescope, and where is it stored?",
+      "answer": "The Asterion telescope uses a 12-centimeter calibration plate, which is stored in cabinet C-14 in the North Dome instrument room.",
+      "expectedAnswerContains": "12-centimeter",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    },
+    {
+      "question": "What are the operating hours and days for the visitor gallery?",
+      "answer": "The visitor gallery is open from Monday through Saturday, opening at 09:30 and closing at 16:45; it is closed on Sunday.",
+      "expectedAnswerContains": "09:30",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    },
+    {
+      "question": "What is the name of the backup projector, where is it located, and what is its test image?",
+      "answer": "The backup projector is named Lumen-3, it is kept in storage room B-2, and its test image is a purple spiral.",
+      "expectedAnswerContains": "Lumen-3",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    },
+    {
+      "question": "Under what weather condition does the outdoor viewing deck close, and does this affect the indoor visitor gallery?",
+      "answer": "The outdoor viewing deck closes when the North Dome weather sensor reports wind above 40 kilometers per hour, but the indoor visitor gallery remains open during that condition.",
+      "expectedAnswerContains": "40 kilometers per hour",
+      "expectedSource": "promptfoo-observatory-operations.txt"
+    }
+  ]
+}

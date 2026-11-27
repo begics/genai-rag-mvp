@@ -1,0 +1,13 @@
+Fictional observatory operations reference for RAG evaluation
+
+This entire document is invented test material. It describes no real facility.
+
+The North Dome observatory tests its Asterion telescope lens every 17 days. The technician records each completed lens test in the blue maintenance ledger.
+
+The Asterion telescope uses a 12-centimeter calibration plate. The plate is stored in cabinet C-14 in the North Dome instrument room.
+
+The visitor gallery opens at 09:30 and closes at 16:45 from Monday through Saturday. The gallery is closed to visitors on Sunday.
+
+The observatory's backup projector is named Lumen-3. It is kept in storage room B-2 and its test image is a purple spiral.
+
+When the North Dome weather sensor reports wind above 40 kilometers per hour, the outdoor viewing deck closes. The indoor visitor gallery remains open during that condition.
