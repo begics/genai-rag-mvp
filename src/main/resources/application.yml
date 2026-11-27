@@ -55,6 +55,9 @@ server.forward-headers-strategy: framework
 rag:
   provider: ${RAG_PROVIDER:offline}
   embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
+  guardrails:
+    denied-topics: ${RAG_GUARDRAILS_DENIED_TOPICS:}
+    max-completion-tokens: ${RAG_GUARDRAILS_MAX_COMPLETION_TOKENS:512}
   infomaniak:
     product-id: ${INFOMANIAK_AI_PRODUCT_ID:}
     api-key: ${INFOMANIAK_AI_API_KEY:}

@@ -105,6 +105,8 @@ jobs:
               "CLOUDFLARED_TUNNEL_TOKEN": "ci-placeholder-token",
               "RAG_PROVIDER": "infomaniak",
               "RAG_EMBEDDING_DIMENSIONS": os.environ["RAG_EMBEDDING_DIMENSIONS"],
+              "RAG_GUARDRAILS_DENIED_TOPICS": "synthetic blocked marker",
+              "RAG_GUARDRAILS_MAX_COMPLETION_TOKENS": "512",
               "INFOMANIAK_AI_API_KEY": os.environ["INFOMANIAK_AI_API_KEY"],
               "INFOMANIAK_AI_PRODUCT_ID": os.environ["INFOMANIAK_AI_PRODUCT_ID"],
               "INFOMANIAK_AI_CHAT_MODEL": os.environ["INFOMANIAK_AI_CHAT_MODEL"],

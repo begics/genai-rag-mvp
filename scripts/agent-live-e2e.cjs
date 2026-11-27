@@ -2,13 +2,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
-const baseUrl = "http://localhost:8080";
+const baseUrl = process.env.AGENT_E2E_BASE_URL || "http://localhost:8080";
 const filename = "orbit-synthetic-model-call-test.txt";
 const objectName = `/${filename}`;
 const screenshotPath = path.join("test-results", "agent-live-e2e.png");
 const syntheticText =
   "Synthetic test document only. Fictitious project ORBIT has test code ORBIT-731. " +
-  "Its start month is April. The project goal is to build an example dashboard.";
+  "Its start month is April. The project goal is to build an example dashboard. " +
+  "Synthetic contact: orbit.synthetic@example.test.";
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -20,14 +21,27 @@ function requiredEnv(name) {
 
 async function authenticatedPage(browser) {
   const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname === "/login/oauth2/code/keycloak") {
+      console.log(`Authentication callback HTTP ${response.status()}.`);
+    }
+  });
   await page.goto(`${baseUrl}/oauth2/authorization/keycloak`, { waitUntil: "domcontentloaded" });
   await page.locator('input[name="username"]').waitFor({ state: "visible", timeout: 30_000 });
   await page.locator('input[name="username"]').fill(requiredEnv("KEYCLOAK_ADMIN_USERNAME"));
   await page.locator('input[name="password"]').fill(requiredEnv("KEYCLOAK_ADMIN_PASSWORD"));
   await page.locator('button[type="submit"], input[type="submit"]').first().click();
   await page.waitForURL((url) => url.origin === baseUrl, { timeout: 60_000 });
+  console.log(`Authentication returned to ${new URL(page.url()).pathname}.`);
   await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
-  await page.locator("#workspace-select:not([disabled])").waitFor({ timeout: 30_000 });
+  try {
+    await page.locator("#workspace-select:not([disabled])").waitFor({ timeout: 30_000 });
+  } catch (error) {
+    const workspaceStatus = await page.evaluate(async () => (await fetch("/api/workspaces")).status);
+    throw new Error(
+      `Workspace UI did not initialize (session API HTTP ${workspaceStatus}, page ${page.url()}): ${error.message}`,
+    );
+  }
   return page;
 }
 
@@ -48,6 +62,27 @@ async function requestJson(page, endpoint, workspaceId) {
     throw new Error(`Authenticated request to ${endpoint} failed with HTTP ${result.status}.`);
   }
   return result.data;
+}
+
+async function postJson(page, endpoint, workspaceId, body) {
+  return page.evaluate(async ({ endpoint, workspaceId, body }) => {
+    const csrfResponse = await fetch("/api/csrf");
+    if (!csrfResponse.ok) return { status: csrfResponse.status };
+    const csrf = await csrfResponse.json();
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Workspace-ID": workspaceId,
+        "X-XSRF-TOKEN": csrf.token,
+      },
+      body: JSON.stringify(body),
+    });
+    return {
+      status: response.status,
+      data: await response.json().catch(() => null),
+    };
+  }, { endpoint, workspaceId, body });
 }
 
 async function listWorkspaceInventory(page) {
@@ -193,6 +228,13 @@ async function run() {
     workspaceId = emptyWorkspace.workspaceId;
     await page.locator("#workspace-select").selectOption(workspaceId);
 
+    const deniedTopic = await postJson(page, "/api/agent/query", workspaceId, {
+      question: "Test synthetic blocked marker before any AI call",
+    });
+    if (deniedTopic.status !== 400) {
+      throw new Error(`The configured denied-topic check returned HTTP ${deniedTopic.status}, expected 400.`);
+    }
+
     await page.locator("#file-input").setInputFiles({
       name: filename,
       mimeType: "text/plain",
@@ -237,6 +279,14 @@ async function run() {
       throw new Error("The agent response did not cite the synthetic source document.");
     }
 
+    const piiProbe = await postJson(page, "/api/query", workspaceId, {
+      question: "What synthetic contact email is listed for ORBIT?",
+    });
+    if (piiProbe.status !== 200
+        || (piiProbe.data?.answer || "").includes("orbit.synthetic@example.test")) {
+      throw new Error("The answer path returned the synthetic email address instead of masking it.");
+    }
+
     await page.waitForFunction(
       (expectedAnswer) =>
         [...document.querySelectorAll(".message.assistant .message-body")]
@@ -249,7 +299,7 @@ async function run() {
     console.log(`Planner: ${pipeline.agentPlanner}`);
     console.log(`Answer model: ${pipeline.chatModel}`);
     console.log("Completed: authenticated UI, indexing/embeddings, agent planning, retrieval/reranking, cited answer.");
-    console.log("Synthetic answer and citation verified.");
+    console.log("Configured-topic rejection, generated-answer PII masking, and citation verified.");
   } catch (error) {
     testFailure = error;
   } finally {

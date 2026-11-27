@@ -10,7 +10,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
-          DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class)
+          DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class,
+          InfomaniakGroundingVerifier.class)
       .withBean(tools.jackson.databind.ObjectMapper.class, () -> JsonMapper.builder().build());
 
   @Test
@@ -21,6 +22,7 @@ class ModelConfigurationTest {
       assertThat(context).doesNotHaveBean(StructuredChatModel.class);
       assertThat(context).hasSingleBean(Reranker.class);
       assertThat(context).hasSingleBean(AgentPlanner.class);
+      assertThat(context).hasSingleBean(GroundingVerifier.class);
     });
   }
 
@@ -45,6 +47,7 @@ class ModelConfigurationTest {
           assertThat(context).hasSingleBean(StructuredChatModel.class);
           assertThat(context).hasSingleBean(Reranker.class);
           assertThat(context).hasSingleBean(AgentPlanner.class);
+          assertThat(context).hasSingleBean(GroundingVerifier.class);
           assertThat(context).hasSingleBean(InfomaniakSpeechTranscription.class);
           InfomaniakAiModels.InfomaniakAiProperties properties =
               context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);
@@ -53,6 +56,7 @@ class ModelConfigurationTest {
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/openai/v1");
           assertThat(chatOptions.getApiKey()).isEqualTo("test-key");
           assertThat(chatOptions.getModel()).isEqualTo("test-chat");
+          assertThat(chatOptions.getMaxCompletionTokens()).isEqualTo(512);
           var embeddingOptions = InfomaniakAiModels.embeddingOptions(properties);
           assertThat(embeddingOptions.getBaseUrl())
               .isEqualTo("https://api.infomaniak.com/2/ai/12345/openai/v1");
@@ -95,9 +99,13 @@ class ModelConfigurationTest {
 
   @Test
   void keepsTheConfiguredModelWhenUsingStructuredOutputOptions() {
-    var options = InfomaniakAiModels.structuredOutputOptions("test-small-planner", "{\"type\":\"object\"}");
+    var properties = new InfomaniakAiModels.InfomaniakAiProperties(
+        12345, "test-key", "test-chat", "test-planner", "embedding", "reranker", 768, 256);
+    var options = InfomaniakAiModels.structuredOutputOptions(
+        properties, "test-small-planner", "{\"type\":\"object\"}");
 
     assertThat(options.getModel()).isEqualTo("test-small-planner");
+    assertThat(options.getMaxCompletionTokens()).isEqualTo(256);
     assertThat(options.getOutputSchema()).isEqualTo("{\"type\":\"object\"}");
   }
 
@@ -127,5 +135,20 @@ class ModelConfigurationTest {
         "rag.embedding-dimensions=4001").run(context ->
         assertThat(context).hasFailed().getFailure()
             .hasMessageContaining("RAG_EMBEDDING_DIMENSIONS must be between 1 and 4000"));
+  }
+
+  @Test
+  void rejectsAnInvalidCompletionTokenCeiling() {
+    contextRunner.withPropertyValues(
+        "rag.provider=infomaniak",
+        "rag.infomaniak.product-id=12345",
+        "rag.infomaniak.api-key=test-key",
+        "rag.infomaniak.chat-model=test-chat",
+        "rag.infomaniak.embedding-model=test-embedding",
+        "rag.infomaniak.rerank-model=test-reranker",
+        "rag.embedding-dimensions=768",
+        "rag.guardrails.max-completion-tokens=0").run(context ->
+        assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("RAG_GUARDRAILS_MAX_COMPLETION_TOKENS"));
   }
 }

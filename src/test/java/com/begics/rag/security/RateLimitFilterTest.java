@@ -28,8 +28,28 @@ class RateLimitFilterTest {
     filter.doFilter(request("/api/query", "192.0.2.1"), limited, chain);
 
     assertThat(limited.getStatus()).isEqualTo(429);
-    assertThat(limited.getHeader("Retry-After")).isNotNull();
+    assertThat(limited.getHeader("Retry-After")).isEqualTo("60");
     verify(chain, times(30)).doFilter(
+        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void limitsMoreExpensiveAgentRunsToTenPerClientAndMinute() throws Exception {
+    RateLimitFilter filter = new RateLimitFilter(
+        Clock.fixed(Instant.parse("2026-11-25T18:00:00Z"), ZoneOffset.UTC));
+    FilterChain chain = mock(FilterChain.class);
+
+    for (int i = 0; i < 10; i++) {
+      filter.doFilter(request("/api/agent/query", "192.0.2.1"),
+          new MockHttpServletResponse(), chain);
+    }
+
+    MockHttpServletResponse limited = new MockHttpServletResponse();
+    filter.doFilter(request("/api/agent/query", "192.0.2.1"), limited, chain);
+
+    assertThat(limited.getStatus()).isEqualTo(429);
+    assertThat(limited.getHeader("Retry-After")).isEqualTo("60");
+    verify(chain, times(10)).doFilter(
         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
 

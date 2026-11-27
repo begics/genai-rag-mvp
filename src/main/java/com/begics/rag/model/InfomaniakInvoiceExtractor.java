@@ -6,6 +6,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.DeserializationFeature;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -56,7 +58,10 @@ public class InfomaniakInvoiceExtractor implements InvoiceExtractor {
   public InvoiceExtraction extract(String text) {
     String output = chat.answerWithSchema(EXTRACTION_INSTRUCTIONS, text, EXTRACTION_SCHEMA);
     try {
-      JsonNode root = objectMapper.readTree(output);
+      JsonNode root = objectMapper.reader()
+          .with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+          .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+          .readTree(output);
       requireExactFields(root);
       return new InvoiceExtraction(
           stringField(root, "supplier", text),

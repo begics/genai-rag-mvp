@@ -170,7 +170,9 @@ class AgentPlanningFlowTest {
             .content("{\"question\":\"Compare documents\"}"))
         .andExpect(status().isBadGateway());
 
-    verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("Compare documents");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
   }
 
   @Test
@@ -211,7 +213,9 @@ class AgentPlanningFlowTest {
             .content("{\"question\":\"Find something\"}"))
         .andExpect(status().isBadGateway());
 
-    verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("Find something");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
   }
 
   @Test
@@ -228,7 +232,9 @@ class AgentPlanningFlowTest {
             .content("{\"question\":\"Find something\"}"))
         .andExpect(status().isBadGateway());
 
-    verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("Find something");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
   }
 
   @Test
@@ -246,7 +252,9 @@ class AgentPlanningFlowTest {
         .andExpect(status().isBadGateway())
         .andExpect(jsonPath("$.error").value("Agent planner returned invalid structured output"));
 
-    verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("Find something");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
   }
 
   @Test
@@ -273,7 +281,9 @@ class AgentPlanningFlowTest {
         .andExpect(status().isBadGateway())
         .andExpect(jsonPath("$.error").value("planner unavailable"));
 
-    verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("Find something");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
   }
 
   private static String plan(String fields) {

@@ -4,6 +4,7 @@ import com.begics.rag.contract.ApiModels;
 import com.begics.rag.domain.RetrievedChunk;
 import com.begics.rag.model.ChatModel;
 import com.begics.rag.model.EmbeddingModel;
+import com.begics.rag.model.GroundingVerifier;
 import com.begics.rag.model.Reranker;
 import com.begics.rag.store.DocumentStore;
 import com.begics.rag.storage.S3DocumentReader;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import com.begics.rag.store.IndexingJobStore.Stage;
@@ -27,12 +29,25 @@ public class RagService {
   private final Reranker reranker;
   private final S3DocumentReader s3DocumentReader;
   private final TextChunker chunker;
+  private final RequestGuardrails requestGuardrails;
+  private final GroundingVerifier groundingVerifier;
+
+  @Autowired
   public RagService(DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
-      Reranker reranker, S3DocumentReader s3DocumentReader, TextChunker chunker) {
+      Reranker reranker, S3DocumentReader s3DocumentReader, TextChunker chunker,
+      RequestGuardrails requestGuardrails, GroundingVerifier groundingVerifier) {
     this.store = store; this.embeddings = embeddings; this.chat = chat;
     this.reranker = reranker;
     this.s3DocumentReader = s3DocumentReader;
     this.chunker = chunker;
+    this.requestGuardrails = requestGuardrails;
+    this.groundingVerifier = groundingVerifier;
+  }
+
+  public RagService(DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
+      Reranker reranker, S3DocumentReader s3DocumentReader, TextChunker chunker) {
+    this(store, embeddings, chat, reranker, s3DocumentReader, chunker,
+        new RequestGuardrails(""), (question, answer, context) -> true);
   }
   public ApiModels.IngestResponse ingest(ApiModels.IngestRequest request, UUID workspaceId) {
     return ingestText(request.source(), request.text(), workspaceId, null);
@@ -88,6 +103,7 @@ public class RagService {
   public ApiModels.QueryResponse queryWithSearchQueries(
       String question, List<String> searchQueries, UUID workspaceId,
       DocumentStore.DocumentFilter filter, String assistantMode) {
+    validateQuestion(question);
     String assistantInstruction = assistantInstruction(assistantMode);
     java.util.LinkedHashMap<String, RetrievedChunk> uniqueCandidates = new java.util.LinkedHashMap<>();
     for (String searchQuery : searchQueries) {
@@ -112,8 +128,16 @@ public class RagService {
         .map(match -> new ApiModels.SourceReference(
             match.documentId(), displayFilename(match.source()), match.chunk(), match.content()))
         .toList();
-    return new ApiModels.QueryResponse(
-        chat.answer(assistantInstruction + question, context), sources);
+    String answer = chat.answer(assistantInstruction + question, context);
+    if (!groundingVerifier.isGrounded(question, answer, context)) {
+      return new ApiModels.QueryResponse(
+          "I could not verify that the retrieved evidence supports a reliable answer.", sources);
+    }
+    return new ApiModels.QueryResponse(answer, sources);
+  }
+
+  public void validateQuestion(String question) {
+    requestGuardrails.validateQuestion(question);
   }
 
   private static String assistantInstruction(String mode) {

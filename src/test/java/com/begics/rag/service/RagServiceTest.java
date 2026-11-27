@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.web.server.ResponseStatusException;
 
 class RagServiceTest {
   private final DocumentStore store = Mockito.mock(DocumentStore.class);
@@ -134,6 +135,33 @@ class RagServiceTest {
         new ApiModels.SourceReference("doc-1", "source.txt", 3, "retrieved text"));
     verify(store).search(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID),
         eq("question"), any(), eq("test-model-v1"), eq(20));
+  }
+
+  @Test
+  void rejectsAConfiguredTopicBeforeEmbeddingOrSearching() {
+    RequestGuardrails guardrails = new RequestGuardrails("synthetic blocked marker");
+    RagService guarded = new RagService(store, embeddings, chat, reranker, s3DocumentReader,
+        new TextChunker(), guardrails, (question, answer, context) -> true);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+        () -> guarded.query(new ApiModels.QueryRequest("Synthetic blocked marker")))
+        .isInstanceOf(ResponseStatusException.class);
+
+    Mockito.verifyNoInteractions(store);
+  }
+
+  @Test
+  void abstainsWhenGroundingVerificationDoesNotConfirmSupport() {
+    when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class))).thenReturn(List.of(
+        new RetrievedChunk("doc-1", "source.txt", 0, "source passage", 0.9)));
+    RagService guarded = new RagService(store, embeddings, chat, reranker, s3DocumentReader,
+        new TextChunker(), new RequestGuardrails(""),
+        (question, answer, context) -> false);
+
+    ApiModels.QueryResponse response = guarded.query(new ApiModels.QueryRequest("question"));
+
+    assertThat(response.answer()).contains("could not verify");
+    assertThat(response.sources()).hasSize(1);
   }
 
   @Test

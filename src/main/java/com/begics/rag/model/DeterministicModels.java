@@ -38,6 +38,13 @@ public class DeterministicModels {
   }
 
   @Bean
+  GroundingVerifier groundingVerifier() {
+    String prefix = "Based on the indexed sources: ";
+    return (question, answer, context) -> answer != null && answer.startsWith(prefix)
+        && context.contains(answer.substring(prefix.length()).strip());
+  }
+
+  @Bean
   Reranker reranker() {
     return (query, candidates, limit) -> candidates.stream().limit(limit).toList();
   }

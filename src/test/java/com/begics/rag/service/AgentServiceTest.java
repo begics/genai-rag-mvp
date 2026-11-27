@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 class AgentServiceTest {
@@ -23,6 +24,21 @@ class AgentServiceTest {
   private final RagService rag = Mockito.mock(RagService.class);
   private final DocumentCompareService comparison = Mockito.mock(DocumentCompareService.class);
   private final AgentService service = new AgentService(planner, documents, rag, comparison);
+
+  @Test
+  void rejectsConfiguredTopicsBeforeListingDocumentsOrCallingThePlanner() {
+    Mockito.doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "restricted topic"))
+        .when(rag).validateQuestion("restricted topic");
+
+    assertThatThrownBy(() -> service.query(
+        new ApiModels.AgentQueryRequest("restricted topic", null, null, null), WORKSPACE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("restricted topic");
+
+    verify(rag).validateQuestion("restricted topic");
+    Mockito.verifyNoMoreInteractions(rag);
+    Mockito.verifyNoInteractions(planner, documents, comparison);
+  }
 
   @Test
   void executesPlannerSearchPlanAndReturnsVisibleTrace() {
@@ -89,6 +105,22 @@ class AgentServiceTest {
   }
 
   @Test
+  void rejectsOversizedPlannerSearchQueriesBeforeRunningTools() {
+    when(documents.listDocuments(WORKSPACE_ID)).thenReturn(List.of());
+    when(planner.plan(any(), any())).thenReturn(
+        new AgentPlanner.AgentPlan(List.of("x".repeat(501)), null, null, null));
+
+    assertThatThrownBy(() -> service.query(
+        new ApiModels.AgentQueryRequest("question", null, null, null), WORKSPACE_ID))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("invalid search query");
+
+    verify(rag).validateQuestion("question");
+    Mockito.verifyNoMoreInteractions(rag);
+    Mockito.verifyNoInteractions(comparison);
+  }
+
+  @Test
   void rejectsComparisonWhenPlannerInventsAnUnknownDocumentIdBeforeSearching() {
     when(documents.listDocuments(WORKSPACE_ID)).thenReturn(List.of(
         new DocumentStore.IndexedDocument("known", "uploads/" + WORKSPACE_ID + "/known.txt", 1, 10)));
@@ -100,7 +132,9 @@ class AgentServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("invalid workspace document IDs");
 
-    Mockito.verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("question");
+    Mockito.verifyNoMoreInteractions(rag);
+    Mockito.verifyNoInteractions(comparison);
   }
 
   @Test
@@ -115,7 +149,9 @@ class AgentServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("invalid workspace document IDs");
 
-    Mockito.verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("question");
+    Mockito.verifyNoMoreInteractions(rag);
+    Mockito.verifyNoInteractions(comparison);
   }
 
   @Test
@@ -133,6 +169,8 @@ class AgentServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("invalid workspace document IDs");
 
-    Mockito.verifyNoInteractions(rag, comparison);
+    verify(rag).validateQuestion("question");
+    Mockito.verifyNoMoreInteractions(rag);
+    Mockito.verifyNoInteractions(comparison);
   }
 }

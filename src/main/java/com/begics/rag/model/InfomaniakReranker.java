@@ -9,11 +9,14 @@ import org.springframework.web.client.RestClient;
 final class InfomaniakReranker implements Reranker {
   private final RestClient restClient;
   private final InfomaniakAiModels.InfomaniakAiProperties properties;
+  private final ProviderTextRedactor redactor;
 
   InfomaniakReranker(
-      RestClient.Builder restClientBuilder, InfomaniakAiModels.InfomaniakAiProperties properties) {
+      RestClient.Builder restClientBuilder, InfomaniakAiModels.InfomaniakAiProperties properties,
+      ProviderTextRedactor redactor) {
     this.restClient = restClientBuilder.build();
     this.properties = properties;
+    this.redactor = redactor;
   }
 
   @Override
@@ -25,7 +28,8 @@ final class InfomaniakReranker implements Reranker {
         .uri(properties.rerankUrl())
         .contentType(MediaType.APPLICATION_JSON)
         .header("Authorization", "Bearer " + properties.apiKey())
-        .body(new RerankRequest(query, candidates.stream().map(RetrievedChunk::content).toList(),
+        .body(new RerankRequest(redactor.redact(query),
+            candidates.stream().map(candidate -> redactor.redact(candidate.content())).toList(),
             properties.rerankModel(), limit))
         .retrieve()
         .body(RerankResponse.class);

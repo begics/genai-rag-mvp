@@ -71,6 +71,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     if ("POST".equalsIgnoreCase(method) && "/api/query".equals(path)) {
       return 30;
     }
+    if ("POST".equalsIgnoreCase(method) && "/api/agent/query".equals(path)) {
+      return 10;
+    }
     if ("POST".equalsIgnoreCase(method) && "/api/documents/reindex-embeddings".equals(path)) {
       return 2;
     }

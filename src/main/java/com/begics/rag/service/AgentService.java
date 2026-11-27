@@ -35,6 +35,7 @@ public class AgentService {
   }
 
   public ApiModels.AgentQueryResponse query(ApiModels.AgentQueryRequest request, UUID workspaceId) {
+    rag.validateQuestion(request.question());
     long planningStarted = System.nanoTime();
     List<DocumentStore.IndexedDocument> indexedDocuments = documents.listDocuments(workspaceId);
     List<AgentPlanner.AgentDocument> plannerDocuments = indexedDocuments.stream()
@@ -72,7 +73,9 @@ public class AgentService {
     steps.add(step("evidence-and-answer", "completed", "Retrieve, rank evidence, and answer",
         answer.sources().isEmpty()
             ? "Executed all planned searches; no supporting passages were found, so the assistant abstained."
-            : "Executed all planned searches, merged and reranked passages, then generated an answer with source references.",
+            : answer.answer().startsWith("I could not verify")
+                ? "Executed all planned searches and reranked passages; grounding verification did not confirm support, so the assistant abstained."
+                : "Executed all planned searches, merged and reranked passages, then generated an answer with source references.",
         searchStarted));
     return new ApiModels.AgentQueryResponse(answer.answer(), answer.sources(), List.copyOf(steps),
         compareResult, MAX_PLAN_STEPS);
