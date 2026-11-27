@@ -136,7 +136,7 @@ try {
     : [
         {
           source: 'promptfoo-observatory.txt',
-          text: 'The Alpine observatory test marker is ORBIT-731.\nThe project start month is April.',
+          text: 'The Alpine observatory test marker is ORBIT-731. The project start month is April.',
         },
         {
           source: 'promptfoo-calibration.txt',

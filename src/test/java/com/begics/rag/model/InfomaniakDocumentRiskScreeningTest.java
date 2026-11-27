@@ -143,7 +143,8 @@ class InfomaniakDocumentRiskScreeningTest {
     ArgumentCaptor<String> schema = ArgumentCaptor.forClass(String.class);
     verify(chat).answerWithSchema(org.mockito.ArgumentMatchers.anyString(),
         org.mockito.ArgumentMatchers.eq(text), schema.capture());
-    assertThat(schema.getValue()).contains("\"pattern\":\"^Line [1-9][0-9]*$\"");
+    assertThat(schema.getValue()).contains("\"location\"")
+        .doesNotContain("\"pattern\"", "\"enum\":[\"Not available in extracted text\"]");
   }
 
   @Test
@@ -204,7 +205,8 @@ class InfomaniakDocumentRiskScreeningTest {
     ArgumentCaptor<String> schema = ArgumentCaptor.forClass(String.class);
     verify(chat).answerWithSchema(org.mockito.ArgumentMatchers.anyString(),
         org.mockito.ArgumentMatchers.eq(text), schema.capture());
-    assertThat(schema.getValue()).contains("\"pattern\":\"^Page [1-9][0-9]*, line [1-9][0-9]*$\"");
+    assertThat(schema.getValue()).contains("\"location\"")
+        .doesNotContain("\"pattern\"", "\"enum\":[\"Not available in extracted text\"]");
   }
 
   @Test
