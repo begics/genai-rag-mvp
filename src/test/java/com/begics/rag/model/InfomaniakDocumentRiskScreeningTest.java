@@ -39,6 +39,7 @@ class InfomaniakDocumentRiskScreeningTest {
     assertThat(instructions.getValue())
         .contains("untrusted data", "fraud/not-fraud verdict", "missing", "never invent a line");
     assertThat(schema.getValue()).contains("\"location\"", "\"uncertainty\"")
+        .contains("\"enum\":[\"Not available in extracted text\"]")
         .doesNotContain("riskLevel", "\"summary\"");
   }
 
@@ -125,6 +126,10 @@ class InfomaniakDocumentRiskScreeningTest {
     var result = screening.evaluate(text);
 
     assertThat(result.findings().getFirst().location()).isEqualTo("Line 2");
+    ArgumentCaptor<String> schema = ArgumentCaptor.forClass(String.class);
+    verify(chat).answerWithSchema(org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.eq(text), schema.capture());
+    assertThat(schema.getValue()).contains("\"pattern\":\"^Line [1-9][0-9]*$\"");
   }
 
   @Test
@@ -182,6 +187,10 @@ class InfomaniakDocumentRiskScreeningTest {
     var result = screening.evaluate(text);
 
     assertThat(result.findings().getFirst().location()).isEqualTo("Page 2, line 2");
+    ArgumentCaptor<String> schema = ArgumentCaptor.forClass(String.class);
+    verify(chat).answerWithSchema(org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.eq(text), schema.capture());
+    assertThat(schema.getValue()).contains("\"pattern\":\"^Page [1-9][0-9]*, line [1-9][0-9]*$\"");
   }
 
   @Test

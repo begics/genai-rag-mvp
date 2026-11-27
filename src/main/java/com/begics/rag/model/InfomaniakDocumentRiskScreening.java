@@ -42,7 +42,7 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
         "findings":{"type":"array","maxItems":8,"items":{"type":"object","properties":{
           "category":{"type":"string","enum":["IMPERSONATION","PAYMENT_REDIRECTION","CREDENTIAL_REQUEST","SUSPICIOUS_LINK","MALWARE_OR_EXECUTABLE","OTHER"]},
           "evidence":{"type":"string","maxLength":300},
-          "location":{"type":"string","maxLength":100},
+          "location":{"type":"string","maxLength":100,%s},
           "uncertainty":{"type":"string","maxLength":500}
         },"required":["category","evidence","location","uncertainty"],"additionalProperties":false}}
       },"required":["findings"],"additionalProperties":false}
@@ -72,7 +72,8 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
     for (int attempt = 0; attempt < MAX_SCREENING_ATTEMPTS; attempt++) {
       String output;
       try {
-        output = chat.answerWithSchema(retryInstructions(lastFailure), providerText, SCHEMA);
+        output = chat.answerWithSchema(
+            retryInstructions(lastFailure), providerText, SCHEMA.formatted(locationConstraint(providerText)));
       } catch (ResponseStatusException exception) {
         throw exception;
       } catch (RuntimeException exception) {
@@ -169,6 +170,16 @@ public class InfomaniakDocumentRiskScreening implements DocumentRiskScreening {
         : "JSON";
     return INSTRUCTIONS + "\nYour previous response failed strict validation for " + issue
         + ". Correct that issue and return only the required JSON object.";
+  }
+
+  private static String locationConstraint(String text) {
+    if (text.indexOf('\f') >= 0) {
+      return "\"pattern\":\"^Page [1-9][0-9]*, line [1-9][0-9]*$\"";
+    }
+    if (text.indexOf('\n') >= 0) {
+      return "\"pattern\":\"^Line [1-9][0-9]*$\"";
+    }
+    return "\"enum\":[\"" + LOCATION_UNAVAILABLE + "\"]";
   }
 
   private static ResponseStatusException invalidResponse(String field) {
