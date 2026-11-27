@@ -260,7 +260,7 @@ async function run() {
     await page.locator("#upload-button").click();
     const fileRow = page.locator("#indexed-file-list .file-row").filter({ hasText: filename });
     await fileRow.waitFor({ state: "visible", timeout: 30_000 });
-    await fileRow.getByRole("button", { name: "Index for chat" }).click();
+    await fileRow.getByRole("button", { name: "Screen and request approval" }).click();
 
     const indexingJob = await waitForIndexing(page, workspaceId);
     if (indexingJob?.status !== "COMPLETED" || indexingJob.chunks < 1) {
