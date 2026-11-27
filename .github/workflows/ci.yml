@@ -142,7 +142,16 @@ jobs:
         run: docker compose up -d --build app
 
       - name: Wait for the application
-        run: curl --fail --retry 60 --retry-delay 3 --retry-connrefused http://localhost:8080/actuator/health
+        run: |
+          attempt=0
+          until curl --fail --silent http://localhost:8080/actuator/health; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 60 ]; then
+              docker compose logs --no-color app
+              exit 1
+            fi
+            sleep 3
+          done
 
       - name: Run authenticated browser test with real models
         run: node scripts/agent-live-e2e.cjs
