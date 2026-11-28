@@ -117,8 +117,26 @@ services:
         aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$S3_BUCKET" >/dev/null 2>&1 ||
           aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$S3_BUCKET"
   clamav:
-    image: clamav/clamav:1.5
+    image: clamav/clamav:1.5.5-debian
     restart: unless-stopped
+  redis:
+    image: redis:7.4.2-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - ${RAG_CACHE_REDIS_MAX_MEMORY:-128mb}
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   app:
     build: .
     restart: unless-stopped
@@ -131,6 +149,8 @@ services:
         condition: service_completed_successfully
       clamav:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - .env
     environment:
@@ -142,6 +162,7 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       CLAMAV_TIMEOUT_MS: "30000"
+      RAG_CACHE_REDIS_HOST: redis
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/rag
       KEYCLOAK_AUTHORIZATION_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/rag/protocol/openid-connect/auth
       KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/rag/protocol/openid-connect/token

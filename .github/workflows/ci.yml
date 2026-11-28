@@ -48,6 +48,85 @@ jobs:
       - name: Build application image
         run: docker build --tag genai-rag-mvp:ci .
 
+  ollama-context-browser-e2e:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      KEYCLOAK_ADMIN_USERNAME: admin
+      KEYCLOAK_ADMIN_PASSWORD: ci-keycloak-password
+      EXPECTED_CONTEXT_TOKENS: "65536"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Create isolated browser-test environment
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_USERNAME=rag
+          DATABASE_PASSWORD=ci-database-password
+          KEYCLOAK_ADMIN_USERNAME=admin
+          KEYCLOAK_ADMIN_PASSWORD=ci-keycloak-password
+          KEYCLOAK_ADMIN_EMAIL=browser-e2e@localhost
+          KEYCLOAK_PUBLIC_URL=http://localhost:8180
+          S3_ACCESS_KEY=ci-access-key
+          S3_SECRET_KEY=ci-storage-password
+          S3_REGION=us-east-1
+          S3_BUCKET=rag-documents
+          CLOUDFLARED_TUNNEL_TOKEN=ci-placeholder-token
+          RAG_PROVIDER=ollama
+          RAG_OLLAMA_RERANK_PROVIDER=ollama
+          RAG_OLLAMA_CONTEXT_TOKENS=65536
+          RAG_EMBEDDING_DIMENSIONS=768
+          EOF
+
+      - name: Verify browser-test Compose configuration
+        run: docker compose config --quiet
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
+          npx playwright install chromium
+
+      - name: Start isolated local-model stack
+        run: docker compose up -d --build app
+
+      - name: Wait for the application
+        run: |
+          attempt=0
+          until curl --fail --silent http://localhost:8080/actuator/health; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 60 ]; then
+              docker compose logs --no-color app
+              exit 1
+            fi
+            sleep 3
+          done
+
+      - name: Verify the configured context in the authenticated browser UI
+        run: node scripts/ollama-context-browser-e2e.cjs
+
+      - name: Save browser evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ollama-context-browser-e2e
+          path: test-results/ollama-context-browser-e2e.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop isolated browser-test stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
   live-agent-e2e:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||

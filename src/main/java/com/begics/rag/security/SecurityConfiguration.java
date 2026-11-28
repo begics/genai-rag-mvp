@@ -31,6 +31,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -42,8 +43,8 @@ public class SecurityConfiguration {
   // CSP hashes authorize only the inline UI blocks; refresh them when those blocks change.
   private static final String CONTENT_SECURITY_POLICY =
       "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-          + "form-action 'self'; script-src 'self' 'sha256-R7R2VSYmvF70mVcISvKzzWn0h7vWDP/PfEbC6K7icOM='; "
-          + "style-src 'self' 'sha256-7v9J8q4Y2afrKLrZBHEfg5lNQ2IkafVPUrJLoHU1iyU='; "
+          + "form-action 'self'; script-src 'self' 'sha256-t4HUz42rwWuxcUP9VgXdVB8Bsb2BpBQiXNxxS9k2+Ko='; "
+          + "style-src 'self' 'sha256-phYStFucjW1/c3Mo5NhubpxfhdBVhUb2j7kAQ8CWNCg='; "
           + "img-src 'self' data:; connect-src 'self'";
 
   @Bean
@@ -57,6 +58,7 @@ public class SecurityConfiguration {
     OidcClientInitiatedLogoutSuccessHandler logoutSuccessHandler =
         new OidcClientInitiatedLogoutSuccessHandler(registrations);
     logoutSuccessHandler.setPostLogoutRedirectUri("{baseUrl}/");
+    AuthenticationSuccessHandler loginSuccessHandler = new WorkspaceFilesAuthenticationSuccessHandler();
     return http
         .csrf(csrf -> csrf
             .csrfTokenRepository(csrfTokenRepository)
@@ -64,7 +66,8 @@ public class SecurityConfiguration {
             .ignoringRequestMatchers(SecurityConfiguration::isBearerRequest))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(authorize -> authorize
-            .requestMatchers("/", "/index.html", "/demo.html", "/demo.css", "/demo.js", "/rag-flow.css", "/favicon.ico",
+            .requestMatchers("/", "/index.html", "/files", "/files/sign-in", "/files.html", "/files.css", "/files.js",
+                "/demo.html", "/demo.css", "/demo.js", "/rag-flow.css", "/favicon.ico",
                 "/actuator/health", "/actuator/health/**", "/oauth2/**", "/login/**").permitAll()
             .anyRequest().authenticated())
         .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
@@ -79,7 +82,8 @@ public class SecurityConfiguration {
             .permissionsPolicy(permissions -> permissions.policy(
                 "camera=(), microphone=(), geolocation=()")))
         .oauth2Login(oauth2 -> oauth2
-            .userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService(jwtDecoder))))
+            .userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService(jwtDecoder)))
+            .successHandler(loginSuccessHandler))
         .oauth2Client(Customizer.withDefaults())
         .oauth2ResourceServer(resource -> resource.jwt(jwt ->
             jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))

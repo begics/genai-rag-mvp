@@ -38,7 +38,11 @@ class OfflineAgentPlannerConfiguration {
         "rag.offline-agent-planner.ollama.model", "gemma4:31b");
     int timeoutMs = environment.getProperty(
         "rag.offline-agent-planner.ollama.timeout-ms", Integer.class, 180_000);
+    int contextTokens = environment.getProperty(
+        "rag.ollama.context-tokens", Integer.class,
+        OllamaStructuredChatModel.DEFAULT_CONTEXT_TOKENS);
     validateOllamaSettings(baseUrl, model, timeoutMs);
+    validateContextTokens(contextTokens);
 
     Duration timeout = Duration.ofMillis(timeoutMs);
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
@@ -48,7 +52,8 @@ class OfflineAgentPlannerConfiguration {
         .baseUrl(baseUrl)
         .requestFactory(requestFactory)
         .build();
-    StructuredChatModel localChat = new OllamaStructuredChatModel(ollamaClient, model, objectMapper);
+    StructuredChatModel localChat = new OllamaStructuredChatModel(
+        ollamaClient, model, objectMapper, 512, contextTokens);
     return new StructuredAgentPlanner(localChat, objectMapper);
   }
 
@@ -70,6 +75,14 @@ class OfflineAgentPlannerConfiguration {
       throw new IllegalStateException(
           "RAG_OFFLINE_AGENT_PLANNER_BASE_URL must be an HTTP(S) URL without credentials or query parameters",
           exception);
+    }
+  }
+
+  private static void validateContextTokens(int contextTokens) {
+    if (contextTokens < 1_024 || contextTokens > OllamaStructuredChatModel.MAX_CONTEXT_TOKENS) {
+      throw new IllegalStateException(
+          "RAG_OLLAMA_CONTEXT_TOKENS must be between 1024 and "
+              + OllamaStructuredChatModel.MAX_CONTEXT_TOKENS);
     }
   }
 }

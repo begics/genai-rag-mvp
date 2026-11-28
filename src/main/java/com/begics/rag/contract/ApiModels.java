@@ -105,10 +105,11 @@ public final class ApiModels {
   public record PipelineInfoResponse(
       String provider, String embeddingService, String embeddingModel, int embeddingDimensions,
       String rerankService, String rerankModel, String chatService, String chatModel,
-      String agentPlanner, String agentTools, int maxAgentSearches) {}
+      String agentPlanner, String agentTools, int maxAgentSearches,
+      Integer chatContextTokens, Integer agentPlannerContextTokens) {}
   public record StorageFileResponse(
       String key, String filename, long sizeBytes, boolean indexed, boolean indexable, int chunks,
-      long indexedBytes) {}
+      long indexedBytes, String status, String stage, String errorMessage) {}
   public record StorageUsageResponse(
       long s3UsedBytes, long s3LimitBytes, long indexUsedBytes, long indexLimitBytes,
       List<StorageFileResponse> files) {}

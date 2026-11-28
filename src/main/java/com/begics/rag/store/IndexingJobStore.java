@@ -68,6 +68,22 @@ public class IndexingJobStore {
         """, IndexingJobStore::mapJob, workspaceId);
   }
 
+  public List<FileIndexingStatus> latestFileStatuses(UUID workspaceId) {
+    return jdbc.query("""
+         select source, status, stage, error_message
+           from indexing_jobs
+          where id in (
+           select distinct on (source) id
+             from indexing_jobs
+            where workspace_id = ? and job_type = 'INDEX'
+            order by source, created_at desc, id desc
+         )
+         order by source
+        """, (rs, row) -> new FileIndexingStatus(
+            rs.getString("source"), rs.getString("status"), Stage.valueOf(rs.getString("stage")),
+            rs.getString("error_message")), workspaceId);
+  }
+
   public boolean hasActiveObjectKey(UUID workspaceId, String objectKey) {
     return Boolean.TRUE.equals(jdbc.queryForObject("""
         select exists (select 1 from indexing_jobs
@@ -241,6 +257,8 @@ public class IndexingJobStore {
           "[]", null, null, null, null, null, null, null, null);
     }
   }
+
+  public record FileIndexingStatus(String source, String status, Stage stage, String errorMessage) {}
 
   public enum Stage {
     QUEUED, READING, TRANSCRIBING, SCREENING, REVIEW_PENDING, CHUNKING, EMBEDDING, SAVING, REINDEXING,

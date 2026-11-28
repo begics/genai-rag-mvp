@@ -108,6 +108,40 @@ If Ollama cannot be reached or returns an HTTP failure, the planner raises a spe
 - Distinguish an unavailable model service from invalid model output, and do not conceal either with an automatic deterministic fallback.
 - Document which request data reaches a model endpoint and how containers reach a host service; “offline” describes the provider configuration, not a guarantee if an operator points the local adapter at a remote URL.
 
+## Learning note: explaining an agent run without exposing private reasoning
+
+The private chat now gives a compact plan/evidence explanation inside the existing collapsible agent trace. It summarizes the workspace search queries that the application actually ran, whether a document comparison completed, and how many source passages came back from how many documents. Users can then inspect the existing step-by-step trace and expand the source cards to read the actual excerpts.
+
+This is deliberately not a dump of model reasoning tokens or hidden chain-of-thought. A model-generated explanation can sound persuasive without being a faithful record of how the answer was produced. Instead, the short summary is assembled from application-owned trace steps and returned source references: it can be checked against observable actions, and it does not require another model call or new data sent to a provider. The UI uses `textContent`/text nodes for values from the API, rather than inserting model-selected query text as HTML.
+
+The summary distinguishes the *plan* (searches/comparison) from the *evidence returned* (source passage and document counts). Counts do not prove that every answer claim is supported, so the existing excerpts and grounding behavior remain important; the UI invites the user to expand source cards rather than treating a source count as a correctness score.
+
+### Transferable lessons
+
+- When users ask to see reasoning, provide a concise, auditable explanation of actions and evidence rather than exposing private token-by-token reasoning.
+- Prefer summaries derived from application events and validated outputs over an additional model-written rationale when the goal is transparency.
+- Make evidence easy to inspect, and avoid presenting source counts as a measure of answer correctness.
+- Render model-influenced strings as text, never as HTML.
+
+## Learning note: showing the embedding and model data flow
+
+The signed-in system details now trace a document from input to searchable index. Uploaded originals are held in RustFS and scanned before extraction; extracted text (or a transcript) is screened before owner approval. After approval, the application splits the text into chunks of up to 800 estimated tokens with 100-token overlap. The embedding model turns each chunk into a vector. PostgreSQL stores the chunk text, vector, and embedding model ID, and maintains a full-text index; the original upload is separate from those indexed text records.
+
+On a question, the application embeds the question with that same embedding model, combines PostgreSQL full-text and vector retrieval, and reranks the candidates by relevance to the question. The reranker sees the question and candidate passage text; up to five ordered passages become answer context. It only selects evidence candidates: it does not write the answer or establish that a claim is true. Deterministic offline mode leaves candidates in their retrieval order. The answer model receives the question and selected passages; a grounding checker gets the question, draft answer, and passages. Agent planning is a different request: it sees the question plus a bounded list of document IDs, names, and types, not document contents. Optional invoice extraction is another path and receives the selected document's text without changing its RAG index.
+
+The document-screening classifier runs on extracted text or a transcript before indexing approval. It can return up to eight structured review cues in categories such as impersonation, payment redirection, credential requests, suspicious links, or malware/executable delivery, along with exact quotations and uncertainty. The application validates that each quotation occurs in the screened text and computes its location. These model-generated cues are not a fraud or safety verdict, and an empty findings list does not prove safety; human approval is still required. Offline mode has no screening model and fails closed instead of silently skipping the gate.
+
+The GUI's provider-specific route note is important. Infomaniak receives the text payloads described above; the app applies only pattern-based masking for detected emails, phone numbers, and Luhn-valid payment-card numbers, and original audio/video sent to Whisper is not redacted. Local Ollama sends model inputs to its configured endpoint; embedding, reranking, answer, and extraction inputs are not generally redacted, although the document-screening adapter applies limited pattern masking. Verify that endpoint is genuinely trusted/local if the data is expected to stay on-device. In deterministic offline mode, normal indexing/search/chat uses local hash embeddings, pass-through ranking, and a canned response instead of model calls; screening fails closed. An explicitly enabled offline Ollama planner is the exception and sends only the question and document metadata.
+
+This distinction keeps three ideas separate: embeddings encode text for similarity, a generative model writes an answer from selected evidence, and an application database stores searchable text and vectors. A vector is not a summary, not a generated answer, and not a privacy boundary; text still exists in the index, and model endpoints receive their documented inputs.
+
+### Transferable lessons
+
+- Explain both the data lifecycle and model payload boundary; users need to know what is stored as well as what leaves the application.
+- Distinguish embedding inputs/outputs from the chat prompt and the database index.
+- Describe privacy controls by provider and by operation rather than making a blanket “local” or “redacted” claim.
+- Keep agent metadata separate from retrieved document contents, and state what each model component actually receives.
+
 ## Learning note: who selects the LLM harness and tools
 
 The model does not independently choose its harness or gain access to tools. The developer chooses a model and implements the surrounding harness: prompt construction, the list of permitted actions, argument validation, authorization checks, and the loop that decides whether to execute a requested action and send a result back. A helpful analogy is a menu: the model may select among presented options, but the application decides what is on the menu, checks the order, and performs it. This distinction is essential because a prompt telling a model not to do something is not an enforcement mechanism.

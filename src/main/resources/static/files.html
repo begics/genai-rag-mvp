@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Workspace files · RAG Assistant</title>
+  <link rel="stylesheet" href="/files.css">
+  <script src="/files.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="RAG Assistant home">
+      <span class="brand-mark" aria-hidden="true">R</span>
+      <span>
+        <span class="brand-name">RAG Assistant</span>
+        <span class="brand-caption">Your private knowledge workspace</span>
+      </span>
+    </a>
+    <a class="account-link" href="/">Back to assistant</a>
+  </header>
+  <main>
+    <div class="page-heading">
+      <div class="eyebrow">Workspace files</div>
+      <h1>Uploads and processing status</h1>
+      <p>See every file stored in the selected workspace and where it is in the screening and indexing workflow.</p>
+    </div>
+
+    <section class="panel workspace-panel" aria-label="Workspace and refresh controls">
+      <label for="workspace-select">Active workspace</label>
+      <select id="workspace-select" disabled>
+        <option>Loading workspaces…</option>
+      </select>
+      <button id="refresh-button" type="button" disabled>Refresh</button>
+      <span id="last-updated" aria-live="polite"></span>
+    </section>
+
+    <p class="page-status" id="page-status" role="status" aria-live="polite">Loading your workspace files…</p>
+    <section class="panel action-panel" id="action-panel" aria-live="polite" hidden>
+      <div>
+        <h2 id="action-heading">Authentication required</h2>
+        <p id="action-description">Sign in to load private workspace files.</p>
+      </div>
+      <a class="upload-link" id="sign-in-link" href="/files/sign-in" hidden>Sign in</a>
+      <button id="retry-button" type="button" hidden>Retry</button>
+    </section>
+
+    <section class="summary-grid" id="summary-grid" aria-label="File status summary">
+      <article class="summary-card">
+        <span class="summary-label">Stored files</span>
+        <strong id="total-count">—</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">In progress</span>
+        <strong id="active-count">—</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Awaiting approval</span>
+        <strong id="approval-count">—</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Indexed</span>
+        <strong id="indexed-count">—</strong>
+      </article>
+    </section>
+
+    <section class="panel files-panel" id="files-panel" aria-labelledby="files-heading">
+      <div class="files-heading">
+        <div>
+          <h2 id="files-heading">Files</h2>
+          <p>Statuses update automatically while files are processing.</p>
+        </div>
+        <a class="upload-link" href="/">Upload or review files</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">File</th>
+              <th scope="col">Size</th>
+              <th scope="col">Status</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody id="file-rows">
+            <tr><td class="empty-row" colspan="4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <p class="privacy-note">Files and processing status are scoped to the active workspace. A file becomes searchable only after screening and workspace-owner approval.</p>
+  </main>
+</body>
+</html>

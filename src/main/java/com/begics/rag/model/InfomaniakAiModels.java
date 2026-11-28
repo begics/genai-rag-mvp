@@ -100,6 +100,11 @@ public class InfomaniakAiModels {
     return new InfomaniakDocumentRiskScreening(screeningChat, objectMapper, redactor);
   }
 
+  @Bean
+  InvoiceExtractor infomaniakInvoiceExtractor(StructuredChatModel chat, ObjectMapper objectMapper) {
+    return new InfomaniakInvoiceExtractor(chat, objectMapper);
+  }
+
   private static StructuredChatModel structuredChatModel(
       InfomaniakAiProperties properties, String modelName, ProviderTextRedactor redactor,
       ProviderCallLimiter limiter) {

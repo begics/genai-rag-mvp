@@ -57,14 +57,23 @@ public class StorageQuotaService {
     for (DocumentStore.IndexedDocument document : documents.listDocuments(workspaceId)) {
       indexed.put(document.source(), document);
     }
+    Map<String, IndexingJobStore.FileIndexingStatus> latestStatuses = new HashMap<>();
+    for (IndexingJobStore.FileIndexingStatus status : jobs.latestFileStatuses(workspaceId)) {
+      latestStatuses.put(status.source(), status);
+    }
     List<StorageFileResponse> files = objects.list("uploads/" + workspaceId + "/").stream()
         .map(object -> {
           DocumentStore.IndexedDocument document = indexed.get(object.key());
+          IndexingJobStore.FileIndexingStatus status = latestStatuses.get(object.key());
           String name = object.key().substring(object.key().lastIndexOf('/') + 1);
+          String indexingStatus = status != null ? status.status() : document != null ? "COMPLETED" : "UPLOADED";
+          String stage = status != null ? status.stage().name() : document != null ? "COMPLETED" : null;
           return new StorageFileResponse(object.key(), name, object.sizeBytes(), document != null,
               document != null || isIndexable(name),
               document == null ? 0 : document.chunks(),
-              document == null ? 0 : document.indexedBytes());
+              document == null ? 0 : document.indexedBytes(),
+              indexingStatus, stage,
+              status == null ? null : status.errorMessage());
         })
         .sorted(java.util.Comparator.comparing(StorageFileResponse::filename, String.CASE_INSENSITIVE_ORDER))
         .toList();

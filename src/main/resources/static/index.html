@@ -136,6 +136,9 @@
     .agent-toggle strong { display: block; color: #283b66; }
     .agent-trace { margin: 10px 0 2px; padding: 10px 12px; border: 1px solid #dce5f5; border-radius: 9px; background: #f8faff; font-size: .72rem; }
     .agent-trace summary { color: #354359; font-weight: 700; cursor: pointer; }
+    .agent-summary { margin: 10px 0; color: #526174; line-height: 1.5; }
+    .agent-summary strong { color: #283b66; }
+    .agent-summary-note { display: block; margin-top: 5px; color: #8290a2; font-size: .68rem; }
     .agent-trace ol { display: grid; gap: 8px; margin: 10px 0; padding-left: 22px; }
     .agent-trace li { padding-left: 2px; color: #526174; line-height: 1.45; }
     .agent-trace li strong { color: #283b66; }
@@ -202,6 +205,23 @@
     .pipeline-disclosure[open] > summary::after { content: "−"; }
     .pipeline-disclosure > summary:focus-visible { outline: 3px solid #9db5ff; outline-offset: 2px; }
     .pipeline-summary-status { min-width: 0; overflow: hidden; color: #718096; font-size: .72rem; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
+    .current-models { margin: 0 0 14px; padding: 13px 15px; border: 1px solid #dfe7f3; border-radius: 12px; background: #fff; box-shadow: 0 5px 18px #1e355108; }
+    .current-models-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+    .current-models-header::-webkit-details-marker { display: none; }
+    .current-models-header::after { content: "+"; margin-left: auto; color: var(--blue); font-size: 1.15rem; }
+    .current-models[open] > .current-models-header { margin-bottom: 10px; }
+    .current-models[open] > .current-models-header::after { content: "−"; }
+    .current-model-title { color: #354359; font-size: .8rem; font-weight: 750; }
+    .current-model-note { margin: 0; color: #77869a; font-size: .66rem; }
+    .current-model-status { margin: 8px 0 0; color: #68778a; font-size: .72rem; }
+    .current-model-status.error { color: #a12622; }
+    .current-model-retry { margin-top: 8px; padding: 6px 9px; border: 1px solid #dce5ff; border-radius: 7px; color: var(--blue-dark); background: #f5f7ff; font: inherit; font-size: .7rem; font-weight: 650; cursor: pointer; }
+    .current-model-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .current-model-group { min-width: 0; }
+    .current-model-group h3 { margin: 0 0 6px; color: #526174; font-size: .68rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+    .current-model-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .current-model { min-width: 0; padding: 6px 9px; border: 1px solid #e7ebf2; border-radius: 7px; color: #58677b; background: #f8f9fc; font-size: .68rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .current-model strong { color: #354359; }
     .pipeline-disclosure .pipeline-panel { margin-bottom: 0; border-top: 0; border-radius: 0 0 11px 11px; }
     .pipeline-panel { margin: 0 0 20px; padding: 18px; border: 1px solid #e0e7f2; border-radius: 14px; background: #fff; box-shadow: 0 8px 26px #1e35510a; }
     .pipeline-panel.failed { border-color: #e7b6b3; }
@@ -303,6 +323,9 @@
       .pipeline-disclosure > summary { min-height: 44px; padding: 9px 12px; }
       .pipeline-summary-status { display: none; }
       .pipeline-panel { padding: 13px; }
+      .current-models-header { align-items: flex-start; }
+      .current-model-note { max-width: 70%; }
+      .current-model-groups { grid-template-columns: 1fr; gap: 10px; }
       .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .pipeline-step { min-height: 72px; }
       .pipeline-step::after { display: none; }
@@ -349,6 +372,7 @@
       </div>
     </div>
     <div class="account-actions">
+      <a class="account-link" href="/files">Workspace files</a>
       <a class="account-link" href="/demo.html">Public demo</a>
       <span class="account-name" id="account-name"></span>
       <a class="account-link" id="login-link" href="/oauth2/authorization/keycloak">Sign in</a>
@@ -361,6 +385,39 @@
       <h1>Ask your documents.</h1>
       <p>Ask a question about files you have indexed. Each question is searched on its own, and answers include passages you can check.</p>
     </div>
+    <details class="current-models" id="current-models" open>
+      <summary class="current-models-header">
+        <span class="current-model-title" id="current-models-title">Models in use</span>
+        <span class="current-model-note">Configured routing · availability is not live-checked</span>
+      </summary>
+      <p class="current-model-status" id="current-model-status" role="status" aria-live="polite">
+        Sign in to view configured models.
+      </p>
+      <button class="current-model-retry" id="current-model-retry" type="button" hidden>Retry</button>
+      <div class="current-model-groups" id="current-model-groups" aria-live="polite" hidden>
+        <section class="current-model-group" aria-label="Indexing models">
+          <h3>Indexing</h3>
+          <div class="current-model-list">
+            <span class="current-model"><strong>Document screening:</strong> <span data-pipeline-model="document-screening-summary">Loading screening model…</span></span>
+            <span class="current-model"><strong>Embeddings:</strong> <span data-pipeline-model="embedding-summary">Loading…</span></span>
+          </div>
+        </section>
+        <section class="current-model-group" aria-label="Search and answer models">
+          <h3>Search &amp; answer</h3>
+          <div class="current-model-list">
+            <span class="current-model"><strong>Reranking:</strong> <span data-pipeline-model="rerank-summary">Loading…</span></span>
+            <span class="current-model"><strong>Answer &amp; invoice extraction:</strong> <span data-pipeline-model="chat-summary">Loading…</span></span>
+            <span class="current-model"><strong>Grounding check:</strong> <span data-pipeline-model="grounding-summary">Loading…</span></span>
+          </div>
+        </section>
+        <section class="current-model-group" aria-label="Agent models">
+          <h3>Agent</h3>
+          <div class="current-model-list">
+            <span class="current-model"><strong>Planning:</strong> <span data-pipeline-model="planner-summary">Loading…</span></span>
+          </div>
+        </section>
+      </div>
+    </details>
     <details class="pipeline-disclosure">
       <summary>System details <span class="pipeline-summary-status" id="pipeline-summary-status">Sign in to see indexing activity.</span></summary>
     <section class="pipeline-panel" aria-labelledby="pipeline-title">
@@ -409,11 +466,12 @@
           <li class="pipeline-step" data-pipeline-node="extract"><strong>Extract / transcribe</strong>PDFBox · UTF-8 · optional Whisper</li>
           <li class="pipeline-step" data-pipeline-node="screening"><strong>AI evidence screening</strong>Quoted indicators · source locations · uncertainty<small data-pipeline-model="document-screening-step">Loading screening model…</small></li>
           <li class="pipeline-step" data-pipeline-node="review"><strong>Workspace owner</strong>Required approval before indexing</li>
-          <li class="pipeline-step" data-pipeline-node="chunks"><strong>Chunk approved text</strong>1,500 chars · 200 overlap</li>
-          <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI embeddings</strong><small data-pipeline-service="embedding">Loading service…</small><small data-pipeline-model="embedding">Loading model…</small></li>
+          <li class="pipeline-step" data-pipeline-node="chunks"><strong>Chunk approved text</strong>Up to 800 tokens · 100 overlap</li>
+          <li class="pipeline-step" data-pipeline-node="embeddings"><strong>AI embeddings</strong><small data-pipeline-service="embedding">Loading service…</small><small data-pipeline-model="embedding">Loading model…</small><small>Up to 100 chunks per batch</small></li>
           <li class="pipeline-step" data-pipeline-node="index"><strong>PostgreSQL</strong>Chunks · full-text · pgvector</li>
         </ol>
-        <p class="pipeline-note"><strong>Media path:</strong> ClamAV scans the uploaded original before extraction or transcription. Supported audio/video is sent to Infomaniak Whisper only after a clean scan; the resulting transcript is screened before approval. Direct text submissions have no uploaded file to scan. Detection or scanner outage blocks processing, and offline mode cannot screen or transcribe.</p>
+        <p class="pipeline-note"><strong>Media path:</strong> ClamAV scans the uploaded original before extraction or transcription. Supported audio/video is sent to Infomaniak Whisper only after a clean scan; the resulting transcript is screened before approval. Direct text submissions have no uploaded file to scan. Detection or scanner outage blocks processing. <span id="provider-capability-note">Offline mode cannot screen or transcribe.</span></p>
+        <p class="pipeline-note"><strong>From input text to index:</strong> new text is screened before it waits for workspace-owner approval. After approval, the app splits it into chunks of up to 800 estimated tokens with a 100-token overlap. Each chunk's text and embedding vector, plus its embedding-model ID, are stored in PostgreSQL/pgvector with a full-text index; the original uploaded file remains in RustFS. Embeddings represent text as numbers for similarity search—they do not generate answers.</p>
       </div>
       <div class="pipeline-lane">
         <h3 class="pipeline-lane-title">2 · Question &amp; answer</h3>
@@ -426,6 +484,48 @@
           <li class="pipeline-step"><strong>Answer model</strong><small data-pipeline-service="chat">Loading service…</small><small data-pipeline-model="chat">Loading model…</small><small>Grounded answer generation</small></li>
           <li class="pipeline-step"><strong>Browser</strong>Answer · source passages · feedback</li>
         </ol>
+      </div>
+      <div class="pipeline-lane">
+        <h3 class="pipeline-lane-title">Text sent to AI models</h3>
+        <div class="component-map" aria-label="Text sent to AI model components">
+          <section class="component-card">
+            <h4>Document screening classifier</h4>
+            <ul><li>Before approval, the structured-output model flags up to eight concrete statements in categories such as impersonation, payment redirection, credential requests, suspicious links, or malware/executable delivery. The app verifies each quote against the screened text and derives its source location. These are review cues, not a fraud or safety verdict; no findings do not prove a document is safe, and a workspace owner must still approve it. Screening is unavailable offline and fails closed.</li></ul>
+          </section>
+          <section class="component-card">
+            <h4>Embeddings</h4>
+            <ul>
+              <li>Indexing sends approved text chunks to the embedding model; search sends the user's question or planned search query to that same model.</li>
+              <li>The model returns vectors. It does not receive a request to write an answer.</li>
+              <li>The configured dimensions must match both the embedding model's output and the PostgreSQL vector column. This pgvector halfvec HNSW setup supports at most 4,000 dimensions. Changing dimensions requires a compatible database schema migration and re-embedding indexed chunks.</li>
+              <li>Embedding reindex updates vectors for existing chunks; it does not change chunk boundaries. To apply a changed chunk size or overlap to existing documents, reprocess those documents.</li>
+            </ul>
+          </section>
+          <section class="component-card">
+            <h4>Agent planner</h4>
+            <ul>
+              <li>Agent mode sends the question and metadata (IDs, filenames, and types) for up to 100 indexed workspace documents.</li>
+              <li>Document contents are not sent to the planner.</li>
+            </ul>
+          </section>
+          <section class="component-card">
+            <h4>Reranker</h4>
+            <ul><li>After PostgreSQL combines full-text and vector results, a separate reranking model receives the question and up to 20 candidate passages and orders them by relevance. The top five then become answer context. It selects evidence candidates; it does not write the answer or verify that claims are true. Deterministic offline mode uses pass-through ranking.</li></ul>
+          </section>
+          <section class="component-card">
+            <h4>Answer and grounding</h4>
+            <ul>
+              <li>The answer model receives the question and selected passages.</li>
+              <li>The grounding checker receives the question, draft answer, and those passages.</li>
+            </ul>
+          </section>
+          <section class="component-card">
+            <h4>Optional invoice extraction</h4>
+            <ul><li>When requested, the extractor receives the selected document's text; extraction does not change its index.</li></ul>
+          </section>
+        </div>
+        <p class="pipeline-note" id="model-data-route-description" aria-live="polite">Loading configured provider data route…</p>
+        <p class="pipeline-note"><strong>Important:</strong> redaction is limited pattern-based masking, not anonymization. Uploaded originals and indexed text remain stored by the application; review sensitive content before sending it to any configured model endpoint.</p>
       </div>
       <div class="pipeline-lane">
         <h3 class="pipeline-lane-title">3 · Agentic orchestration · read-only tools</h3>
@@ -450,16 +550,10 @@
         </ol>
         <p class="pipeline-note"><strong>Document comparison:</strong> the agent can compare two indexed, workspace-owned text, Markdown, CSV, or readable PDF files using an exact paragraph diff. It is not semantic analysis. Invoice extraction is separate from the RAG index and requires a provider that supports structured output.</p>
       </div>
-      <h3 class="pipeline-lane-title">Configured AI components</h3>
-      <div class="pipeline-components" aria-label="Configured AI components">
+      <h3 class="pipeline-lane-title">Configured application components</h3>
+      <div class="pipeline-components" aria-label="Configured application components">
         <span class="pipeline-component"><strong>Provider:</strong> <span data-pipeline-model="provider">Loading…</span></span>
-        <span class="pipeline-component"><strong>Embeddings:</strong> <span data-pipeline-model="embedding-summary">Loading…</span></span>
-        <span class="pipeline-component"><strong>Reranker:</strong> <span data-pipeline-model="rerank-summary">Loading…</span></span>
-        <span class="pipeline-component"><strong>Answer / extraction:</strong> <span data-pipeline-model="chat-summary">Loading…</span></span>
-        <span class="pipeline-component"><strong>Planner:</strong> <span data-pipeline-model="planner-summary">Loading…</span></span>
-        <span class="pipeline-component"><strong>Document screening:</strong> <span data-pipeline-model="document-screening-summary">Loading screening model…</span></span>
         <span class="pipeline-component"><strong>Malware scanner:</strong> ClamAV · private Compose network · fail-closed</span>
-        <span class="pipeline-component"><strong>Model routing:</strong> the planner model plans; the chat model answers and extracts invoice fields</span>
         <span class="pipeline-component"><strong>Agent tools:</strong> <span data-pipeline-model="agent-tools">Loading…</span></span>
         <span class="pipeline-component"><strong>Agent guardrails:</strong> read-only · max <span data-pipeline-model="agent-search-limit">3</span> searches · listed document IDs only</span>
       </div>
@@ -489,7 +583,7 @@
             <li><strong>Embeddings:</strong> index chunks and questions using the same configured model</li>
             <li><strong>Reranker:</strong> reorders retrieved candidates before answer generation</li>
             <li><strong>Chat model:</strong> grounded answers and structured invoice extraction</li>
-            <li><strong>Planner and document screening:</strong> Infomaniak structured-output model; offline planning is deterministic unless local Ollama is enabled, while screening remains unavailable and fails closed</li>
+            <li><strong>Planner and document screening:</strong> Infomaniak uses its structured-output planner model; Local Ollama uses Gemma for both; offline mode screens fail-closed</li>
             <li><strong>Whisper transcription:</strong> optional provider path for supported media</li>
           </ul>
         </section>
@@ -504,7 +598,7 @@
             <li><strong>Prompt boundary:</strong> retrieved passages are treated as untrusted data, not instructions. There is no separate prompt-injection classifier.</li>
             <li><strong>Planner validation:</strong> structured planner output must match its strict schema; search count and query bounds are checked, and comparison IDs must identify distinct, indexed, supported documents in the active workspace.</li>
             <li><strong>Tool scope:</strong> agent tools are read-only, operate only on workspace documents, and run at most 3 planned searches; arbitrary SQL, writes, and external actions are unavailable.</li>
-            <li><strong>Answer grounding:</strong> Infomaniak answers receive a second structured model check and abstain when support is not confirmed; offline mode uses a deterministic passage-membership check.</li>
+            <li><strong>Answer grounding:</strong> Infomaniak and Local Ollama answers receive a second structured model check and abstain when support is not confirmed; offline mode uses a deterministic passage-membership check.</li>
             <li><strong>Completion length:</strong> Infomaniak chat calls have a configurable completion-token ceiling (default 512, maximum 8,192); it does not cap input, embeddings, reranking, transcription, or total cost.</li>
             <li><strong>Invoice extraction:</strong> structured output is checked for allowed fields and valid types, dates, amounts, and source quotations; review extracted values before use.</li>
             <li><strong>Upload validation:</strong> uploads are limited to 20 MiB and checked by file signature or strict UTF-8 rather than trusting the supplied MIME type; each user has 1 GB object and indexed-data quotas aggregated across workspaces.</li>
@@ -652,7 +746,7 @@
         </details>
         <details class="privacy-disclosure">
           <summary>Privacy and file screening</summary>
-          <div class="privacy-note"><strong>Private workspace.</strong> Uploaded originals are scanned for malware before extraction or transcription; a detection or scanner outage blocks processing. Extracted text is sent to Infomaniak for evidence-based screening when you request indexing. Every item waits for your approval; the model reports indicators and uncertainty, not a fraud/safety verdict. Original audio/video sent for Whisper transcription is not redacted. Neither check guarantees a document is safe.</div>
+          <div class="privacy-note"><strong>Private workspace.</strong> Uploaded originals are scanned for malware before extraction or transcription; a detection or scanner outage blocks processing. <span id="screening-privacy-description">Extracted text is screened by the configured provider when you request indexing.</span> Every item waits for your approval; the model reports indicators and uncertainty, not a fraud/safety verdict. <span id="transcription-privacy-description">Original audio/video sent for Whisper transcription is not redacted.</span> Neither check guarantees a document is safe.</div>
         </details>
       </aside>
     </div>
@@ -672,6 +766,10 @@
     const indexingJobList = document.getElementById("indexing-job-list");
     const pipelineStatus = document.getElementById("pipeline-status");
     const pipelineSummaryStatus = document.getElementById("pipeline-summary-status");
+    const currentModels = document.getElementById("current-models");
+    const currentModelStatus = document.getElementById("current-model-status");
+    const currentModelGroups = document.getElementById("current-model-groups");
+    const currentModelRetry = document.getElementById("current-model-retry");
     const agentStatus = document.getElementById("agent-status");
     const pipelinePanel = document.querySelector(".pipeline-panel");
     const pipelineSteps = Array.from(document.querySelectorAll("[data-pipeline-node]"));
@@ -690,6 +788,7 @@
       embeddingSummary: document.querySelector('[data-pipeline-model="embedding-summary"]'),
       rerankSummary: document.querySelector('[data-pipeline-model="rerank-summary"]'),
       chatSummary: document.querySelector('[data-pipeline-model="chat-summary"]'),
+      groundingSummary: document.querySelector('[data-pipeline-model="grounding-summary"]'),
       plannerSummary: document.querySelector('[data-pipeline-model="planner-summary"]'),
       agentTools: document.querySelector('[data-pipeline-model="agent-tools"]'),
       agentSearchLimit: document.querySelector('[data-pipeline-model="agent-search-limit"]')
@@ -703,6 +802,10 @@
     const workspaceSelect = document.getElementById("workspace-select");
     const loginLink = document.getElementById("login-link");
     const accountName = document.getElementById("account-name");
+    const providerCapabilityNote = document.getElementById("provider-capability-note");
+    const screeningPrivacyDescription = document.getElementById("screening-privacy-description");
+    const transcriptionPrivacyDescription = document.getElementById("transcription-privacy-description");
+    const modelDataRouteDescription = document.getElementById("model-data-route-description");
     const maxIndexFileBytes = 20 * 1024 * 1024;
     let activeWorkspaceId = sessionStorage.getItem("rag-workspace-id");
     let isAuthenticated = false;
@@ -734,10 +837,44 @@
       });
 
       if (authenticated) {
+        setCurrentModelsState("loading");
         workspaceSelect.disabled = true;
         updateFileSelection();
+      } else {
+        setCurrentModelsState("unauthenticated");
       }
     }
+
+    function setCurrentModelsState(state, message) {
+      currentModelGroups.hidden = state !== "loaded";
+      currentModelRetry.hidden = state !== "error";
+      currentModelStatus.hidden = state === "loaded";
+      currentModelStatus.classList.toggle("error", state === "error");
+      currentModelStatus.textContent = message || ({
+        unauthenticated: "Sign in to view configured models.",
+        loading: "Loading configured model routing…",
+        loaded: "",
+        error: "Couldn’t load model configuration. Check your connection and retry."
+      })[state];
+      if (state !== "loaded") {
+        for (const element of [
+          pipelineModels.embeddingSummary,
+          pipelineModels.rerankSummary,
+          pipelineModels.chatSummary,
+          pipelineModels.groundingSummary,
+          pipelineModels.plannerSummary,
+          pipelineModels.documentScreeningSummary
+        ]) {
+          element.textContent = "";
+        }
+      }
+    }
+
+    currentModels.open = sessionStorage.getItem("rag-models-panel-open") !== "false";
+    currentModels.addEventListener("toggle", () => {
+      sessionStorage.setItem("rag-models-panel-open", String(currentModels.open));
+    });
+    currentModelRetry.addEventListener("click", () => loadPipelineInfo());
 
     async function apiFetch(url, options = {}) {
       const method = (options.method || "GET").toUpperCase();
@@ -785,6 +922,35 @@
         const summary = document.createElement("summary");
         const completed = agentResult.steps.filter(step => step.status === "completed").length;
         summary.textContent = `How this answer was found · ${completed} completed step${completed === 1 ? "" : "s"}`;
+        const searchSteps = agentResult.steps.filter(step => step.tool === "workspace-search");
+        const comparisonStep = agentResult.steps.find(step => step.tool === "document-compare");
+        const planSummary = document.createElement("p");
+        planSummary.className = "agent-summary";
+        const planLabel = document.createElement("strong");
+        planLabel.textContent = "Plan summary: ";
+        const queries = searchSteps.map(step => step.detail
+          .replace(/^Planned query: /, "")
+          .replace(/\. Executed in the bounded combined search run\.$/, ""));
+        planSummary.append(planLabel, document.createTextNode(
+          queries.length ? `searched the workspace for ${queries.join("; ")}` : "no workspace searches were run"));
+        if (comparisonStep?.status === "completed") {
+          planSummary.append(document.createTextNode(" and compared the selected workspace documents"));
+        }
+        planSummary.append(document.createTextNode("."));
+
+        const evidenceSummary = document.createElement("p");
+        evidenceSummary.className = "agent-summary";
+        const evidenceLabel = document.createElement("strong");
+        evidenceLabel.textContent = "Evidence summary: ";
+        const sourceCount = sources?.length ?? 0;
+        const documentCount = new Set((sources ?? []).map(source => source.documentId)).size;
+        evidenceSummary.append(evidenceLabel, document.createTextNode(sourceCount
+          ? `returned ${sourceCount} source passage${sourceCount === 1 ? "" : "s"} from ${documentCount} document${documentCount === 1 ? "" : "s"}. Expand the source cards below to inspect them.`
+          : "no source passages were returned for this answer."));
+        const explanationNote = document.createElement("small");
+        explanationNote.className = "agent-summary-note";
+        explanationNote.textContent = "This summarizes application actions and returned sources; it is not raw model reasoning.";
+        evidenceSummary.append(explanationNote);
         const steps = document.createElement("ol");
         for (const step of agentResult.steps) {
           const item = document.createElement("li");
@@ -800,7 +966,7 @@
           }
           steps.append(item);
         }
-        trace.append(summary, steps);
+        trace.append(summary, planSummary, evidenceSummary, steps);
         if (agentResult.comparison) {
           const diff = renderComparison(agentResult.comparison);
           diff.classList.add("agent-comparison");
@@ -1400,31 +1566,88 @@
     }
 
     async function loadPipelineInfo() {
+      setCurrentModelsState("loading");
       try {
         const info = await responseJson(await apiFetch("/api/pipeline-info"));
         pipelineModels.provider.textContent = info.provider;
         pipelineModels.embeddingService.textContent = `${info.provider} · ${info.embeddingService}`;
         pipelineModels.embedding.textContent = `${info.embeddingModel} · ${info.embeddingDimensions} dimensions`;
         pipelineModels.embeddingSummary.textContent =
-          `${info.embeddingModel} · ${info.embeddingDimensions} dimensions`;
+          `${info.provider} · ${info.embeddingModel} · ${info.embeddingDimensions} dimensions`;
         pipelineModels.queryEmbedding.textContent = `${info.embeddingService} · ${info.embeddingModel}`;
-        pipelineModels.rerankService.textContent = `${info.provider} · ${info.rerankService}`;
+        pipelineModels.rerankService.textContent = info.rerankService;
         pipelineModels.rerank.textContent = info.rerankModel;
-        pipelineModels.rerankSummary.textContent = `${info.rerankModel} · ${info.rerankService}`;
+        const rerankProvider = info.rerankService.startsWith("Infomaniak")
+          ? "Infomaniak"
+          : info.rerankService.startsWith("Local Ollama")
+            ? "Local Ollama"
+            : info.provider;
+        pipelineModels.rerankSummary.textContent =
+          `${rerankProvider} · ${info.rerankModel} · ${info.rerankService}`;
         pipelineModels.chatService.textContent = `${info.provider} · ${info.chatService}`;
         pipelineModels.chat.textContent = info.chatModel;
-        pipelineModels.chatSummary.textContent = `${info.chatModel} · ${info.chatService}`;
+        const chatContext = Number.isInteger(info.chatContextTokens)
+          ? ` · configured context: ${info.chatContextTokens.toLocaleString("en-US")} tokens`
+          : "";
+        pipelineModels.chatSummary.textContent =
+          `${info.provider} · ${info.chatModel} · ${info.chatService}${chatContext}`;
+        pipelineModels.groundingSummary.textContent = info.provider === "Offline demo mode"
+          ? "Deterministic local grounding check · no model call"
+          : `${info.provider} · ${info.chatModel} · ${info.chatService}`;
         pipelineModels.agentPlanner.textContent = info.agentPlanner;
         const documentScreening = info.provider === "Infomaniak AI"
           ? info.agentPlanner
-          : "Unavailable in offline mode; screening fails closed";
+          : info.provider === "Local Ollama"
+            ? info.chatModel
+            : "Unavailable in offline mode; screening fails closed";
         pipelineModels.documentScreeningStep.textContent = documentScreening;
-        pipelineModels.documentScreeningSummary.textContent = documentScreening;
-        pipelineModels.plannerSummary.textContent = info.agentPlanner;
+        pipelineModels.documentScreeningSummary.textContent = info.provider === "Offline demo mode"
+          ? documentScreening
+          : `${info.provider} · ${documentScreening} · ${info.provider === "Infomaniak AI"
+            ? "Infomaniak structured-output API"
+            : info.chatService}`;
+        if (info.provider === "Infomaniak AI") {
+          providerCapabilityNote.textContent =
+            "Infomaniak provides evidence screening and Whisper transcription for supported audio/video.";
+          screeningPrivacyDescription.textContent =
+            "Extracted text is sent to Infomaniak for evidence-based screening when you request indexing.";
+          transcriptionPrivacyDescription.textContent =
+            "Original audio/video sent for Whisper transcription is not redacted.";
+          modelDataRouteDescription.textContent =
+            "Destination: Infomaniak AI. Text requests (screening, embeddings, reranking, planning, answers, and optional extraction) use limited masking for detected emails, phone numbers, and Luhn-valid payment-card numbers. This does not cover every personal detail; original audio/video sent to Whisper is not redacted.";
+        } else if (info.provider === "Local Ollama") {
+          providerCapabilityNote.textContent =
+            "Local Ollama screens text; audio/video transcription is not configured in Ollama mode.";
+          screeningPrivacyDescription.textContent =
+            "Extracted text is screened locally by Ollama on this machine when you request indexing.";
+          transcriptionPrivacyDescription.textContent =
+            "Audio/video transcription is unavailable in local Ollama mode.";
+          const infomaniakReranking = info.rerankService.startsWith("Infomaniak");
+          modelDataRouteDescription.textContent = infomaniakReranking
+            ? "Destinations: embeddings, answers, planning, document screening, invoice extraction, and grounding checks use the configured Ollama endpoint; reranking sends the question and candidate passages to Infomaniak after limited email/phone/payment-card pattern masking. Confirm the Ollama URL is trusted and local if you expect those other model calls to stay on your machine."
+            : "Destination: the configured Ollama endpoint, not Infomaniak. Embedding, reranking, answer, planner, and extraction requests send their listed text inputs to that endpoint; document screening applies limited email/phone/payment-card pattern masking only. Confirm the Ollama URL is trusted and local if you expect data to stay on your machine.";
+        } else {
+          providerCapabilityNote.textContent = "Offline mode cannot screen or transcribe.";
+          screeningPrivacyDescription.textContent =
+            "Document screening is unavailable in offline mode and fails closed.";
+          transcriptionPrivacyDescription.textContent =
+            "Audio/video transcription is unavailable in offline mode.";
+          modelDataRouteDescription.textContent =
+            "Destination: no model endpoint for ordinary offline indexing, search, or chat; these use hash-based demo embeddings, pass-through ranking, and a canned response. Screening is unavailable and fails closed. If the optional Ollama planner is enabled, it sends the question and indexed-document metadata—not document contents—to its configured Ollama endpoint.";
+        }
+        const plannerContext = Number.isInteger(info.agentPlannerContextTokens)
+          ? ` · configured context: ${info.agentPlannerContextTokens.toLocaleString("en-US")} tokens`
+          : "";
+        pipelineModels.plannerSummary.textContent = `${info.agentPlanner}${plannerContext}`;
         pipelineModels.agentTools.textContent = info.agentTools;
         pipelineModels.agentSearchLimit.textContent = info.maxAgentSearches;
+        setCurrentModelsState("loaded");
       } catch (error) {
-        pipelineModels.provider.textContent = `Could not load: ${error.message}`;
+        if (error.message.includes("(401)")) {
+          setAuthenticated(false);
+          return;
+        }
+        setCurrentModelsState("error");
       }
     }
 
@@ -1662,6 +1885,7 @@
           accountName.textContent = "";
           return;
         }
+        setCurrentModelsState("error");
         chatStatus.textContent = error.message;
         chatStatus.classList.add("error");
       }

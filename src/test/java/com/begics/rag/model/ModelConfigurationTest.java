@@ -13,7 +13,7 @@ class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
           DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class,
-          InfomaniakGroundingVerifier.class, OfflineAgentPlannerConfiguration.class)
+          InfomaniakGroundingVerifier.class, OfflineAgentPlannerConfiguration.class, OllamaAiModels.class)
       .withBean(tools.jackson.databind.ObjectMapper.class, () -> JsonMapper.builder().build());
 
   @Test
@@ -54,6 +54,73 @@ class ModelConfigurationTest {
   }
 
   @Test
+  void selectsOllamaForLocalRagModelsWithoutInfomaniakConfiguration() {
+    contextRunner
+        .withPropertyValues(
+            "rag.provider=ollama",
+            "rag.ollama.rerank-provider=ollama",
+            "rag.ollama.base-url=http://localhost:11434",
+            "rag.ollama.chat-model=gemma4:test",
+            "rag.ollama.embedding-model=embeddinggemma-2:test",
+            "rag.ollama.rerank-model=reranker:test",
+            "rag.ollama.embedding-dimensions=768")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(EmbeddingModel.class);
+          assertThat(context).hasSingleBean(ChatModel.class);
+          assertThat(context).hasSingleBean(StructuredChatModel.class);
+          assertThat(context).hasSingleBean(Reranker.class);
+          assertThat(context.getBean(Reranker.class)).isInstanceOf(OllamaReranker.class);
+          assertThat(context).hasSingleBean(AgentPlanner.class);
+          assertThat(context).hasSingleBean(GroundingVerifier.class);
+          assertThat(context).hasSingleBean(DocumentRiskScreening.class);
+          assertThat(context).hasSingleBean(InvoiceExtractor.class);
+          assertThat(context).hasSingleBean(com.begics.rag.domain.SpeechTranscription.class);
+          assertThat(context.getBean(EmbeddingModel.class).modelId())
+              .isEqualTo("ollama:embeddinggemma-2:test:768");
+        });
+  }
+
+  @Test
+  void rejectsOllamaContextLimitsOutsideTheSupportedRangeAtStartup() {
+    contextRunner
+        .withPropertyValues(
+            "rag.provider=ollama",
+            "rag.ollama.context-tokens=512")
+        .run(context -> assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("RAG_OLLAMA_CONTEXT_TOKENS must be between 1024 and 131072"));
+  }
+
+  @Test
+  void usesInfomaniakOnlyForRerankingWithLocalOllamaChatAndEmbeddings() {
+    contextRunner
+        .withPropertyValues(
+            "rag.provider=ollama",
+            "rag.ollama.rerank-provider=infomaniak",
+            "rag.infomaniak.product-id=12345",
+            "rag.infomaniak.api-key=test-key",
+            "rag.infomaniak.rerank-model=Qwen/Qwen3-Reranker-0.6B",
+            "rag.ollama.embedding-dimensions=768")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(EmbeddingModel.class);
+          assertThat(context).hasSingleBean(ChatModel.class);
+          assertThat(context).hasSingleBean(Reranker.class);
+          assertThat(context.getBean(Reranker.class)).isInstanceOf(InfomaniakReranker.class);
+          assertThat(context.getBean(EmbeddingModel.class).modelId()).contains("embeddinggemma-2");
+        });
+  }
+
+  @Test
+  void requiresInfomaniakCredentialsWhenSelectedForOllamaReranking() {
+    contextRunner.withPropertyValues(
+        "rag.provider=ollama",
+        "rag.ollama.rerank-provider=infomaniak").run(context ->
+        assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("INFOMANIAK_AI_PRODUCT_ID must be a positive integer"));
+  }
+
+  @Test
   void rejectsInvalidOllamaBaseUrlsAtStartup() {
     contextRunner
         .withBean(RestClient.Builder.class, RestClient::builder)
@@ -81,6 +148,7 @@ class ModelConfigurationTest {
           assertThat(context).hasSingleBean(Reranker.class);
           assertThat(context).hasSingleBean(AgentPlanner.class);
           assertThat(context).hasSingleBean(GroundingVerifier.class);
+          assertThat(context).hasSingleBean(InvoiceExtractor.class);
           assertThat(context).hasSingleBean(InfomaniakSpeechTranscription.class);
           InfomaniakAiModels.InfomaniakAiProperties properties =
               context.getBean(InfomaniakAiModels.InfomaniakAiProperties.class);

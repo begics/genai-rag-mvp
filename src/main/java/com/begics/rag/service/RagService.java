@@ -8,14 +8,16 @@ import com.begics.rag.model.GroundingVerifier;
 import com.begics.rag.model.Reranker;
 import com.begics.rag.store.DocumentStore;
 import com.begics.rag.storage.S3DocumentReader;
+import com.begics.rag.store.IndexingJobStore.Stage;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
-import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import com.begics.rag.store.IndexingJobStore.Stage;
 
 @Service
 public class RagService {
@@ -31,17 +33,28 @@ public class RagService {
   private final TextChunker chunker;
   private final RequestGuardrails requestGuardrails;
   private final GroundingVerifier groundingVerifier;
+  private final RagQueryCache queryCache;
 
   @Autowired
-  public RagService(DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
+  public RagService(
+      DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
       Reranker reranker, S3DocumentReader s3DocumentReader, TextChunker chunker,
-      RequestGuardrails requestGuardrails, GroundingVerifier groundingVerifier) {
+      RequestGuardrails requestGuardrails, GroundingVerifier groundingVerifier,
+      RagQueryCache queryCache) {
     this.store = store; this.embeddings = embeddings; this.chat = chat;
     this.reranker = reranker;
     this.s3DocumentReader = s3DocumentReader;
     this.chunker = chunker;
     this.requestGuardrails = requestGuardrails;
     this.groundingVerifier = groundingVerifier;
+    this.queryCache = queryCache;
+  }
+
+  public RagService(DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
+      Reranker reranker, S3DocumentReader s3DocumentReader, TextChunker chunker,
+      RequestGuardrails requestGuardrails, GroundingVerifier groundingVerifier) {
+    this(store, embeddings, chat, reranker, s3DocumentReader, chunker, requestGuardrails, groundingVerifier,
+        new RagQueryCache(1_000, Duration.ofMinutes(5), new SimpleMeterRegistry()));
   }
 
   public RagService(DocumentStore store, EmbeddingModel embeddings, ChatModel chat,
@@ -104,15 +117,18 @@ public class RagService {
       String question, List<String> searchQueries, UUID workspaceId,
       DocumentStore.DocumentFilter filter, String assistantMode) {
     validateQuestion(question);
+    queryCache.purgeExpired();
     String assistantInstruction = assistantInstruction(assistantMode);
     java.util.LinkedHashMap<String, RetrievedChunk> uniqueCandidates = new java.util.LinkedHashMap<>();
     for (String searchQuery : searchQueries) {
+      float[] searchEmbedding = queryCache.embedding(
+          embeddings.modelId(), searchQuery, () -> embeddings.embed(searchQuery));
       List<RetrievedChunk> results = filter == null
           || ((filter.source() == null || filter.source().isBlank())
               && (filter.documentType() == null || filter.documentType().isBlank()))
-          ? store.search(workspaceId, searchQuery, embeddings.embed(searchQuery),
+          ? store.search(workspaceId, searchQuery, searchEmbedding,
               embeddings.modelId(), CANDIDATE_RESULTS)
-          : store.search(workspaceId, searchQuery, embeddings.embed(searchQuery),
+          : store.search(workspaceId, searchQuery, searchEmbedding,
               embeddings.modelId(), CANDIDATE_RESULTS, filter);
       for (RetrievedChunk result : results) {
         uniqueCandidates.putIfAbsent(result.documentId() + ":" + result.chunk(), result);
@@ -128,12 +144,20 @@ public class RagService {
         .map(match -> new ApiModels.SourceReference(
             match.documentId(), displayFilename(match.source()), match.chunk(), match.content()))
         .toList();
-    String answer = chat.answer(assistantInstruction + question, context);
+    String effectiveQuestion = assistantInstruction + question;
+    String answerCacheKey = queryCache.answerKey(workspaceId.toString(), effectiveQuestion, sources);
+    var cachedAnswer = queryCache.answer(answerCacheKey);
+    if (cachedAnswer.isPresent()) {
+      return cachedAnswer.get();
+    }
+    String answer = chat.answer(effectiveQuestion, context);
     if (!groundingVerifier.isGrounded(question, answer, context)) {
       return new ApiModels.QueryResponse(
           "I could not verify that the retrieved evidence supports a reliable answer.", sources);
     }
-    return new ApiModels.QueryResponse(answer, sources);
+    ApiModels.QueryResponse response = new ApiModels.QueryResponse(answer, sources);
+    queryCache.cacheAnswer(answerCacheKey, response);
+    return response;
   }
 
   public void validateQuestion(String question) {

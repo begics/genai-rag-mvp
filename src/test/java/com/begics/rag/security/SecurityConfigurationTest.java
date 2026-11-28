@@ -236,6 +236,30 @@ class SecurityConfigurationTest {
   }
 
   @Test
+  void protectsTheWorkspaceFilesPageAndServesItsStaticAssets() throws Exception {
+    mvc.perform(get("/files"))
+        .andExpect(status().isOk())
+        .andExpect(forwardedUrl("/files.html"));
+    mvc.perform(get("/files.html"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("Uploads and processing status")))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("Authentication required")))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("/files/sign-in")));
+    mvc.perform(get("/files.css")).andExpect(status().isOk());
+    mvc.perform(get("/files.js"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("/api/storage")));
+    mvc.perform(get("/api/workspaces")).andExpect(status().isUnauthorized());
+    var signIn = mvc.perform(get("/files/sign-in"))
+        .andExpect(status().is3xxRedirection())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+            "/oauth2/authorization/keycloak"))
+        .andReturn();
+    org.assertj.core.api.Assertions.assertThat(signIn.getRequest().getSession(false)
+        .getAttribute("workspaceFilesLoginReturn")).isEqualTo(Boolean.TRUE);
+  }
+
+  @Test
   void acceptsOidcAuthenticatedRequestsAndAddsSecurityHeaders() throws Exception {
     when(workspaces.resolve(any(), any())).thenReturn(WORKSPACE_ID);
     when(ragService.query(any(QueryRequest.class), eq(WORKSPACE_ID)))
@@ -280,7 +304,7 @@ class SecurityConfigurationTest {
         new com.begics.rag.contract.ApiModels.PipelineInfoResponse(
             "Infomaniak AI", "Embeddings API", "embedding-model", 3584,
             "Rerank API", "rerank-model", "Chat API", "chat-model",
-            "Structured planner", "Search and compare", 3));
+            "Structured planner", "Search and compare", 3, null, null));
 
     mvc.perform(get("/api/pipeline-info").with(oidcLogin()))
         .andExpect(status().isOk())
@@ -342,7 +366,46 @@ class SecurityConfigurationTest {
         .contains("data-pipeline-model=\"rerank-summary\"")
         .contains("data-pipeline-model=\"chat-summary\"")
         .contains("data-pipeline-model=\"planner-summary\"")
-        .contains("the planner model plans; the chat model answers and extracts invoice fields");
+        .contains("Models in use")
+        .contains("Configured routing · availability is not live-checked")
+        .contains("<details class=\"current-models\" id=\"current-models\" open>")
+        .contains("id=\"current-model-status\" role=\"status\" aria-live=\"polite\"")
+        .contains("Sign in to view configured models.")
+        .contains("id=\"current-model-retry\" type=\"button\" hidden>Retry</button>")
+        .contains("Loading configured model routing…")
+        .contains("Couldn’t load model configuration. Check your connection and retry.")
+        .contains("rag-models-panel-open")
+        .contains("aria-label=\"Indexing models\"")
+        .contains("aria-label=\"Search and answer models\"")
+        .contains("aria-label=\"Agent models\"")
+        .contains("Answer &amp; invoice extraction:")
+        .contains("Grounding check:")
+        .contains("Planning:")
+        .contains("Document screening:");
+    org.assertj.core.api.Assertions.assertThat(html.indexOf("class=\"current-models\""))
+        .isLessThan(html.indexOf("<details class=\"pipeline-disclosure\">"));
+    org.assertj.core.api.Assertions.assertThat(html)
+        .contains("From input text to index:")
+        .contains("Text sent to AI models")
+        .contains("Document contents are not sent to the planner")
+        .contains("id=\"model-data-route-description\"")
+        .contains("limited pattern-based masking, not anonymization")
+        .contains("configured Ollama endpoint, not Infomaniak")
+        .contains("no model endpoint for ordinary offline indexing, search, or chat")
+        .contains("Document screening classifier")
+        .contains("These are review cues, not a fraud or safety verdict")
+        .contains("no findings do not prove a document is safe")
+        .contains("chunks of up to 800 estimated tokens with a 100-token overlap")
+        .contains("Up to 100 chunks per batch")
+        .contains("must match both the embedding model's output and the PostgreSQL vector column")
+        .contains("supports at most 4,000 dimensions")
+        .contains("compatible database schema migration and re-embedding indexed chunks")
+        .contains("does not change chunk boundaries")
+        .contains("reprocess those documents")
+        .contains("After PostgreSQL combines full-text and vector results")
+        .contains("up to 20 candidate passages")
+        .contains("top five then become answer context")
+        .contains("Deterministic offline mode uses pass-through ranking");
     org.assertj.core.api.Assertions.assertThat(html)
         .contains("From retrieved evidence to a checked answer")
         .contains("This app receives complete provider responses rather than streaming visible tokens")
@@ -351,6 +414,9 @@ class SecurityConfigurationTest {
     org.assertj.core.api.Assertions.assertThat(html)
         .contains("The application developer selects the model and defines the harness")
         .contains("Offline mode uses one fixed search query unless the optional local Ollama planner is explicitly enabled")
+        .contains("Plan summary:")
+        .contains("Evidence summary:")
+        .contains("it is not raw model reasoning")
         .contains("Regular chat bypasses the agent planner")
         .contains("description.id = \"empty-description\"")
         .contains("suggestions.id = \"suggestions\"");

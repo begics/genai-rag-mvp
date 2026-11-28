@@ -2,11 +2,16 @@ package com.begics.rag.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.begics.rag.contract.ApiModels.SourceReference;
 import com.begics.rag.domain.RetrievedChunk;
+import com.begics.rag.domain.SpeechTranscription;
+import com.begics.rag.service.StorageQuotaService;
 import com.begics.rag.service.WorkspaceAccessService;
 import com.begics.rag.store.IndexingJobStore.IndexingJob;
+import com.begics.rag.storage.S3ObjectWriter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -27,7 +32,7 @@ import java.io.InputStream;
 
 @Testcontainers(disabledWithoutDocker = true)
 class JdbcDocumentStoreIntegrationTest {
-  private static final int INITIAL_VECTOR_DIMENSIONS = 1_536;
+  private static final int INITIAL_VECTOR_DIMENSIONS = 768;
   private static final int VECTOR_DIMENSIONS = 3_584;
 
   @Container
@@ -44,15 +49,17 @@ class JdbcDocumentStoreIntegrationTest {
   void migrateAndCreateStore() {
     dataSource = new DriverManagerDataSource(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+    jdbc.execute("drop schema public cascade");
+    jdbc.execute("create schema public");
     Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
-        .placeholders(Map.of("embeddingDimensions", Integer.toString(INITIAL_VECTOR_DIMENSIONS)))
+        .placeholders(Map.of(
+            "embeddingDimensions", "1536",
+            "targetEmbeddingDimensions", Integer.toString(VECTOR_DIMENSIONS)))
         .load()
         .migrate();
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-    jdbc.execute("truncate table documents cascade");
-    jdbc.execute("truncate table indexing_jobs");
     store = new JdbcDocumentStore(jdbc);
   }
 
@@ -209,7 +216,7 @@ class JdbcDocumentStoreIntegrationTest {
         .dataSource(dataSource)
         .locations("classpath:db/migration")
         .target(MigrationVersion.fromVersion("2"))
-        .placeholders(Map.of("embeddingDimensions", Integer.toString(INITIAL_VECTOR_DIMENSIONS)))
+        .placeholders(Map.of("embeddingDimensions", "768", "targetEmbeddingDimensions", "768"))
         .load()
         .migrate();
     String documentId = "8f04f78a-bc4b-4ac4-86b4-7e314d0b1bd1";
@@ -220,7 +227,7 @@ class JdbcDocumentStoreIntegrationTest {
     Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
-        .placeholders(Map.of("embeddingDimensions", Integer.toString(INITIAL_VECTOR_DIMENSIONS)))
+        .placeholders(Map.of("embeddingDimensions", "768", "targetEmbeddingDimensions", "768"))
         .load()
         .migrate();
     store = new JdbcDocumentStore(jdbc);
@@ -242,7 +249,7 @@ class JdbcDocumentStoreIntegrationTest {
 
     assertThat(legacyColumnExists).isFalse();
     assertThat(indexedDimensions).isNull();
-    assertThat(currentType).isEqualTo("halfvec(3584)");
+    assertThat(currentType).isEqualTo("halfvec(768)");
     assertThat(results).extracting(RetrievedChunk::content)
         .containsExactly("existing searchable content");
   }
@@ -452,6 +459,80 @@ class JdbcDocumentStoreIntegrationTest {
     assertThat(access.resolve(alice, aliceTeam.id().toString())).isEqualTo(aliceTeam.id());
     assertThatThrownBy(() -> access.resolve(bob, aliceTeam.id().toString()))
         .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+  }
+
+  @Test
+  void selectsTheLatestIndexingStatusPerSourceWithinItsWorkspace() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    String source = "uploads/shared/manual.pdf";
+    JdbcTemplate jdbc = jdbc();
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", firstWorkspace, "First");
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", secondWorkspace, "Second");
+    UUID latestFirstWorkspaceJob = UUID.randomUUID();
+    UUID secondWorkspaceJob = UUID.randomUUID();
+    jdbc.update("""
+        insert into indexing_jobs(id, source, status, stage, workspace_id, created_at)
+        values (?, ?, 'COMPLETED', 'COMPLETED', ?, now() - interval '1 minute')
+        """, UUID.randomUUID(), source, firstWorkspace);
+    jdbc.update("""
+        insert into indexing_jobs(id, source, object_key, status, stage, workspace_id)
+        values (?, ?, ?, 'QUEUED', 'QUEUED', ?)
+        """, latestFirstWorkspaceJob, source, source, firstWorkspace);
+    jdbc.update("""
+        insert into indexing_jobs(id, source, status, stage, workspace_id)
+        values (?, ?, 'FAILED', 'FAILED', ?)
+        """, secondWorkspaceJob, source, secondWorkspace);
+
+    IndexingJobStore jobs = new IndexingJobStore(jdbc);
+
+    assertThat(jobs.latestFileStatuses(firstWorkspace))
+        .extracting(IndexingJobStore.FileIndexingStatus::status)
+        .containsExactly("QUEUED");
+    assertThat(jobs.latestFileStatuses(firstWorkspace))
+        .extracting(IndexingJobStore.FileIndexingStatus::stage)
+        .containsExactly(IndexingJobStore.Stage.QUEUED);
+    assertThat(jobs.latestFileStatuses(secondWorkspace))
+        .extracting(IndexingJobStore.FileIndexingStatus::status)
+        .containsExactly("FAILED");
+  }
+
+  @Test
+  void includesLatestIndexingStatusAndUploadedFilesWithoutJobsInStorageListing() {
+    UUID workspaceId = UUID.randomUUID();
+    String indexedKey = "uploads/" + workspaceId + "/manual.pdf";
+    String uploadedKey = "uploads/" + workspaceId + "/notes.txt";
+    JdbcTemplate jdbc = jdbc();
+    jdbc.update("insert into workspaces(id, name) values (?, ?)", workspaceId, "Files");
+    jdbc.update("insert into workspace_members(workspace_id, subject, role) values (?, ?, 'OWNER')",
+        workspaceId, "owner");
+    jdbc.update("""
+        insert into uploaded_objects(object_key, workspace_id, uploaded_by)
+        values (?, ?, 'owner')
+        """, indexedKey, workspaceId);
+    jdbc.update("""
+        insert into indexing_jobs(id, source, object_key, status, stage, workspace_id, review_required)
+        values (?, ?, ?, 'PROCESSING', 'SCREENING', ?, true)
+        """, UUID.randomUUID(), indexedKey, indexedKey, workspaceId);
+
+    S3ObjectWriter objects = mock(S3ObjectWriter.class);
+    when(objects.list("uploads/" + workspaceId + "/")).thenReturn(List.of(
+        new S3ObjectWriter.StoredObject(indexedKey, 100),
+        new S3ObjectWriter.StoredObject(uploadedKey, 50)));
+    DocumentStore documents = mock(DocumentStore.class);
+    when(documents.listDocuments(workspaceId)).thenReturn(List.of());
+    SpeechTranscription transcription = mock(SpeechTranscription.class);
+    StorageQuotaService storage = new StorageQuotaService(
+        jdbc, objects, documents, new IndexingJobStore(jdbc), transcription);
+
+    var result = storage.usage("owner", workspaceId);
+
+    assertThat(result.files())
+        .extracting(file -> org.assertj.core.groups.Tuple.tuple(
+            file.key(), file.status(), file.stage(), file.errorMessage()))
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(indexedKey, "PROCESSING", "SCREENING", null),
+            org.assertj.core.groups.Tuple.tuple(uploadedKey, "UPLOADED", null, null));
   }
 
   private JdbcTemplate jdbc() {

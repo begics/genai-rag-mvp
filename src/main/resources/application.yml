@@ -1,6 +1,11 @@
 spring:
   application.name: genai-rag-mvp
   config.import: optional:file:.env[.properties]
+  data.redis:
+    host: ${RAG_CACHE_REDIS_HOST:localhost}
+    port: ${RAG_CACHE_REDIS_PORT:6379}
+    connect-timeout: ${RAG_CACHE_REDIS_CONNECT_TIMEOUT:500ms}
+    timeout: ${RAG_CACHE_REDIS_TIMEOUT:500ms}
   servlet:
     multipart:
       max-file-size: 20MB
@@ -13,6 +18,7 @@ spring:
     enabled: true
     placeholders:
       embeddingDimensions: 1536
+      targetEmbeddingDimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
   security:
     oauth2:
       client:
@@ -58,6 +64,9 @@ management.endpoint.health.probes.enabled: true
 server.forward-headers-strategy: framework
 rag:
   provider: ${RAG_PROVIDER:offline}
+  cache:
+    max-entries: ${RAG_CACHE_MAX_ENTRIES:1000}
+    ttl-seconds: ${RAG_CACHE_TTL_SECONDS:300}
   provider-limits:
     max-concurrent-calls: ${RAG_PROVIDER_MAX_CONCURRENT_CALLS:8}
   offline-agent-planner:
@@ -66,6 +75,15 @@ rag:
       base-url: ${RAG_OFFLINE_AGENT_PLANNER_BASE_URL:http://host.docker.internal:11434}
       model: ${RAG_OFFLINE_AGENT_PLANNER_MODEL:gemma4:31b}
       timeout-ms: ${RAG_OFFLINE_AGENT_PLANNER_TIMEOUT_MS:180000}
+  ollama:
+    base-url: ${RAG_OLLAMA_BASE_URL:http://host.docker.internal:11434}
+    chat-model: ${RAG_OLLAMA_CHAT_MODEL:gemma4:12b-mlx}
+    context-tokens: ${RAG_OLLAMA_CONTEXT_TOKENS:32768}
+    embedding-model: ${RAG_OLLAMA_EMBEDDING_MODEL:embeddinggemma-2}
+    rerank-provider: ${RAG_OLLAMA_RERANK_PROVIDER:infomaniak}
+    rerank-model: ${RAG_OLLAMA_RERANK_MODEL:AuditAid/Qwen3_Reranker:0.6B_Q8}
+    request-timeout-ms: ${RAG_OLLAMA_REQUEST_TIMEOUT_MS:180000}
+    embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:768}
   embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
   guardrails:
     denied-topics: ${RAG_GUARDRAILS_DENIED_TOPICS:}

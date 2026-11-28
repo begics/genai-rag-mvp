@@ -8,15 +8,25 @@ import org.springframework.web.client.RestClient;
 
 final class InfomaniakReranker implements Reranker {
   private final RestClient restClient;
-  private final InfomaniakAiModels.InfomaniakAiProperties properties;
+  private final String rerankUrl;
+  private final String apiKey;
+  private final String model;
   private final ProviderTextRedactor redactor;
   private final ProviderCallLimiter limiter;
 
   InfomaniakReranker(
       RestClient.Builder restClientBuilder, InfomaniakAiModels.InfomaniakAiProperties properties,
       ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
+    this(restClientBuilder, properties.rerankUrl(), properties.apiKey(), properties.rerankModel(), redactor, limiter);
+  }
+
+  InfomaniakReranker(
+      RestClient.Builder restClientBuilder, String rerankUrl, String apiKey, String model,
+      ProviderTextRedactor redactor, ProviderCallLimiter limiter) {
     this.restClient = restClientBuilder.build();
-    this.properties = properties;
+    this.rerankUrl = rerankUrl;
+    this.apiKey = apiKey;
+    this.model = model;
     this.redactor = redactor;
     this.limiter = limiter;
   }
@@ -27,12 +37,12 @@ final class InfomaniakReranker implements Reranker {
       return List.of();
     }
     RerankResponse response = limiter.call(ProviderCallLimiter.Operation.RERANK, () -> restClient.post()
-        .uri(properties.rerankUrl())
+        .uri(rerankUrl)
         .contentType(MediaType.APPLICATION_JSON)
-        .header("Authorization", "Bearer " + properties.apiKey())
+        .header("Authorization", "Bearer " + apiKey)
         .body(new RerankRequest(redactor.redact(query),
             candidates.stream().map(candidate -> redactor.redact(candidate.content())).toList(),
-            properties.rerankModel(), limit))
+            model, limit))
         .retrieve()
         .body(RerankResponse.class));
     if (response == null || response.results() == null) {

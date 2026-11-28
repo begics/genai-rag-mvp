@@ -16,11 +16,14 @@ import com.begics.rag.model.Reranker;
 import com.begics.rag.store.DocumentStore;
 import com.begics.rag.store.IndexingJobStore.Stage;
 import com.begics.rag.storage.S3DocumentReader;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
 import org.springframework.web.server.ResponseStatusException;
 
 class RagServiceTest {
@@ -60,17 +63,17 @@ class RagServiceTest {
   @Test
   void splitsTextAtTheConfiguredChunkBoundary() {
     when(store.save(any(UUID.class), anyString(), anyList(), anyList(), anyString(), any())).thenReturn("doc-1");
-    String text = "x".repeat(1_501);
+    String text = "word ".repeat(1_501);
 
     ApiModels.IngestResponse response = service.ingest(new ApiModels.IngestRequest(text, "source.txt"));
 
-    assertThat(response.chunks()).isEqualTo(2);
+    assertThat(response.chunks()).isGreaterThan(1);
     org.mockito.ArgumentCaptor<List<String>> chunks = org.mockito.ArgumentCaptor.forClass(List.class);
     verify(store).save(eq(WorkspaceAccessService.LEGACY_WORKSPACE_ID), eq("source.txt"),
         chunks.capture(), anyList(), eq("test-model-v1"), eq(null));
-    assertThat(chunks.getValue()).hasSize(2);
-    assertThat(chunks.getValue().get(0)).hasSizeLessThanOrEqualTo(1_500);
-    assertThat(chunks.getValue().get(1)).contains(chunks.getValue().get(0).substring(1_300));
+    JTokkitTokenCountEstimator tokenCounter = new JTokkitTokenCountEstimator();
+    assertThat(chunks.getValue()).hasSize(response.chunks());
+    assertThat(chunks.getValue()).allMatch(chunk -> tokenCounter.estimate(chunk) <= 800);
   }
 
   @Test
@@ -104,10 +107,10 @@ class RagServiceTest {
         new RagService(store, batchModel, chat, reranker, s3DocumentReader, new TextChunker());
 
     ApiModels.IngestResponse response = batchService.ingest(
-        new ApiModels.IngestRequest("x".repeat(200_000), "batch.txt"));
+        new ApiModels.IngestRequest("word ".repeat(100_000), "batch.txt"));
 
     assertThat(response.chunks()).isGreaterThan(100);
-    assertThat(batchCalls.get()).isEqualTo(2);
+    assertThat(batchCalls.get()).isEqualTo((response.chunks() + 99) / 100);
   }
 
   @Test
@@ -154,14 +157,87 @@ class RagServiceTest {
   void abstainsWhenGroundingVerificationDoesNotConfirmSupport() {
     when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class))).thenReturn(List.of(
         new RetrievedChunk("doc-1", "source.txt", 0, "source passage", 0.9)));
-    RagService guarded = new RagService(store, embeddings, chat, reranker, s3DocumentReader,
+    AtomicInteger chatCalls = new AtomicInteger();
+    AtomicInteger groundingCalls = new AtomicInteger();
+    RagService guarded = new RagService(store, embeddings,
+        (question, context) -> {
+          chatCalls.incrementAndGet();
+          return "unverified answer";
+        }, reranker, s3DocumentReader,
         new TextChunker(), new RequestGuardrails(""),
-        (question, answer, context) -> false);
+        (question, answer, context) -> {
+          groundingCalls.incrementAndGet();
+          return false;
+        });
 
     ApiModels.QueryResponse response = guarded.query(new ApiModels.QueryRequest("question"));
+    guarded.query(new ApiModels.QueryRequest("question"));
 
     assertThat(response.answer()).contains("could not verify");
     assertThat(response.sources()).hasSize(1);
+    assertThat(chatCalls).hasValue(2);
+    assertThat(groundingCalls).hasValue(2);
+  }
+
+  @Test
+  void cachesOnlyGroundedAnswersAndScopesThemToWorkspaceAndRetrievedEvidence() {
+    UUID firstWorkspace = UUID.randomUUID();
+    UUID secondWorkspace = UUID.randomUUID();
+    RetrievedChunk firstEvidence = new RetrievedChunk("doc-1", "source.txt", 0, "same evidence", 0.9);
+    RetrievedChunk otherWorkspaceEvidence =
+        new RetrievedChunk("doc-2", "source.txt", 0, "same evidence", 0.9);
+    RetrievedChunk changedEvidence = new RetrievedChunk("doc-1", "source.txt", 0, "changed evidence", 0.9);
+    when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class)))
+        .thenReturn(List.of(firstEvidence), List.of(firstEvidence), List.of(otherWorkspaceEvidence),
+            List.of(changedEvidence), List.of(firstEvidence));
+    AtomicInteger embeddingCalls = new AtomicInteger();
+    EmbeddingModel countingEmbeddings = new EmbeddingModel() {
+      @Override
+      public float[] embed(String text) {
+        embeddingCalls.incrementAndGet();
+        return new float[] {1, 0};
+      }
+
+      @Override
+      public List<float[]> embedAll(List<String> texts) {
+        return texts.stream().map(text -> new float[] {1, 0}).toList();
+      }
+
+      @Override
+      public String modelId() {
+        return "test-model-v1";
+      }
+    };
+    AtomicInteger chatCalls = new AtomicInteger();
+    AtomicInteger groundingCalls = new AtomicInteger();
+    RagService cachingService = new RagService(store, countingEmbeddings,
+        (question, context) -> "answer-" + chatCalls.incrementAndGet(), reranker, s3DocumentReader,
+        new TextChunker(), new RequestGuardrails(""),
+        (question, answer, context) -> {
+          groundingCalls.incrementAndGet();
+          return true;
+        }, new RagQueryCache(10, Duration.ofMinutes(5), new SimpleMeterRegistry()));
+
+    ApiModels.QueryResponse first = cachingService.query(
+        new ApiModels.QueryRequest("question"), firstWorkspace);
+    ApiModels.QueryResponse repeated = cachingService.query(
+        new ApiModels.QueryRequest("question"), firstWorkspace);
+    ApiModels.QueryResponse otherWorkspace = cachingService.query(
+        new ApiModels.QueryRequest("question"), secondWorkspace);
+    ApiModels.QueryResponse updatedEvidence = cachingService.query(
+        new ApiModels.QueryRequest("question"), firstWorkspace);
+    ApiModels.QueryResponse differentProfile = cachingService.query(
+        new ApiModels.QueryRequest("question", null, null, "summary"), firstWorkspace);
+
+    assertThat(first.answer()).isEqualTo("answer-1");
+    assertThat(repeated.answer()).isEqualTo("answer-1");
+    assertThat(otherWorkspace.answer()).isEqualTo("answer-2");
+    assertThat(updatedEvidence.answer()).isEqualTo("answer-3");
+    assertThat(differentProfile.answer()).isEqualTo("answer-4");
+    assertThat(embeddingCalls).hasValue(1);
+    assertThat(chatCalls).hasValue(4);
+    assertThat(groundingCalls).hasValue(4);
+    assertThat(updatedEvidence.sources().getFirst().excerpt()).isEqualTo("changed evidence");
   }
 
   @Test
@@ -283,12 +359,20 @@ class RagServiceTest {
   void reportsProviderFailureRatherThanFabricatingSuccess() {
     when(store.search(any(UUID.class), anyString(), any(), anyString(), any(Integer.class))).thenReturn(List.of(
         new RetrievedChunk("doc-1", "source.txt", 0, "retrieved text", 0.9)));
+    AtomicInteger chatCalls = new AtomicInteger();
     RagService failingProviderService = new RagService(store, embeddings,
-        (question, context) -> { throw new IllegalStateException("provider unavailable"); },
+        (question, context) -> {
+          chatCalls.incrementAndGet();
+          throw new IllegalStateException("provider unavailable");
+        },
         reranker, s3DocumentReader, new TextChunker());
     org.assertj.core.api.Assertions.assertThatThrownBy(
         () -> failingProviderService.query(new ApiModels.QueryRequest("question")))
         .isInstanceOf(IllegalStateException.class).hasMessage("provider unavailable");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+        () -> failingProviderService.query(new ApiModels.QueryRequest("question")))
+        .isInstanceOf(IllegalStateException.class).hasMessage("provider unavailable");
+    assertThat(chatCalls).hasValue(2);
   }
 
   @Test
