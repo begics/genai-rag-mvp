@@ -42,8 +42,8 @@ public class SecurityConfiguration {
   // CSP hashes authorize only the inline UI blocks; refresh them when those blocks change.
   private static final String CONTENT_SECURITY_POLICY =
       "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-          + "form-action 'self'; script-src 'self' 'sha256-LjDlFZXFz99PknFs3GZ4ueqxvTRDXPq+a4/BCK7gll0='; "
-          + "style-src 'self' 'sha256-XtObR08/pMoH8Fg8UHf9FHqjkJD7easGJQkTB2tOow0='; "
+          + "form-action 'self'; script-src 'self' 'sha256-EakEsylEQLbv6kKCAG2c+Ew2ClbHUsjOZpEb/K0e/vM='; "
+          + "style-src 'self' 'sha256-7v9J8q4Y2afrKLrZBHEfg5lNQ2IkafVPUrJLoHU1iyU='; "
           + "img-src 'self' data:; connect-src 'self'";
 
   @Bean
