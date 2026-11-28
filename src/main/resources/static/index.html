@@ -55,12 +55,13 @@
     .account-name { max-width: 190px; overflow: hidden; color: #526174; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
     .account-link, .account-button { padding: 8px 11px; border: 1px solid #dfe5ef; border-radius: 8px; color: #394a61; background: white; font-size: .78rem; font-weight: 650; text-decoration: none; }
     .account-link:hover, .account-button:hover { border-color: #b6c6ff; color: var(--blue-dark); background: #f7f8ff; }
-    main { max-width: 1220px; margin: 0 auto; padding: 30px 24px 38px; }
-    .page-heading { margin-bottom: 22px; }
+    main { max-width: 1220px; margin: 0 auto; padding: 30px 24px 38px; display: flex; flex-direction: column; }
+    .page-heading { order: 1; margin-bottom: 22px; }
     .eyebrow { color: var(--blue); font-size: .72rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
     .page-heading h1 { margin: 7px 0 5px; font-size: clamp(1.55rem, 3vw, 2rem); letter-spacing: -.045em; }
     .page-heading p { margin: 0; color: var(--muted); font-size: .94rem; }
-    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: stretch; }
+    .workspace { order: 2; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: stretch; }
+    .pipeline-disclosure { order: 3; }
     .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 26px #1e35510a; }
     .chat-panel { min-height: min(690px, calc(100vh - 220px)); display: flex; flex-direction: column; overflow: hidden; }
     .chat-header { min-height: 75px; padding: 17px 22px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -76,6 +77,7 @@
     .empty-state h3 { margin: 0 0 8px; font-size: 1.14rem; letter-spacing: -.025em; }
     .empty-state p { margin: 0 auto 21px; max-width: 390px; color: var(--muted); font-size: .9rem; line-height: 1.6; }
     .suggestions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+    .suggestions[hidden] { display: none; }
     .suggestion {
       padding: 9px 12px; border: 1px solid #e0e6f0; border-radius: 999px;
       color: #46556a; background: white; font-size: .8rem; transition: .15s ease;
@@ -89,6 +91,7 @@
     .message.user .message-body { color: white; background: var(--blue); border-color: var(--blue); border-bottom-right-radius: 5px; }
     .message.assistant .message-body { border-bottom-left-radius: 5px; }
     .message.error .message-body { color: #9c2c32; background: #fff6f5; border-color: #f4d8d5; }
+    .source-empty { margin: 10px 0 0; color: #78869a; font-size: .78rem; }
     .sources { margin: 2px 0 0; padding: 12px 0 0 18px; border-top: 1px solid #e9edf4; color: #607087; font-size: .78rem; }
     .sources li + li { margin-top: 5px; }
     .source-reference summary { cursor: pointer; }
@@ -99,10 +102,30 @@
     .thinking span:nth-child(3) { animation-delay: .3s; }
     @keyframes pulse { 50% { opacity: .35; transform: translateY(-3px); } }
     .composer-wrap { padding: 14px clamp(16px, 3.5vw, 38px) 18px; border-top: 1px solid var(--line); background: #fcfdff; }
+    .advanced-settings { margin-bottom: 10px; }
+    .advanced-settings > summary, .tools-disclosure > summary, .feedback-details > summary, .privacy-disclosure > summary {
+      padding: 8px 10px; border: 1px solid #e5eaf1; border-radius: 8px; color: #526174;
+      background: #fff; cursor: pointer; font-size: .75rem; font-weight: 650; list-style: none;
+    }
+    .advanced-settings > summary::-webkit-details-marker, .tools-disclosure > summary::-webkit-details-marker,
+    .feedback-details > summary::-webkit-details-marker, .privacy-disclosure > summary::-webkit-details-marker { display: none; }
+    .advanced-settings > summary::after, .tools-disclosure > summary::after,
+    .feedback-details > summary::after, .privacy-disclosure > summary::after {
+      float: right; color: var(--blue); content: "+"; font-size: 1rem; line-height: 1;
+    }
+    .advanced-settings[open] > summary::after, .tools-disclosure[open] > summary::after,
+    .feedback-details[open] > summary::after, .privacy-disclosure[open] > summary::after { content: "−"; }
+    .advanced-settings > summary:focus-visible, .tools-disclosure > summary:focus-visible,
+    .feedback-details > summary:focus-visible, .privacy-disclosure > summary:focus-visible {
+      outline: 3px solid #9db5ff; outline-offset: 2px;
+    }
+    .advanced-options { padding-top: 9px; }
     .retrieval-filters { display: flex; gap: 8px; margin: 0 2px 9px; }
     .retrieval-filters input, .retrieval-filters select { min-width: 0; padding: 7px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; background: #fff; font-size: .75rem; }
     .retrieval-filters input { flex: 1; }
     .feedback-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+    .feedback-details { margin-top: 8px; }
+    .feedback-details .feedback-controls { margin-top: 7px; }
     .feedback-button { padding: 5px 8px; border: 1px solid #dfe5ef; border-radius: 7px; color: #526174; background: #fff; font-size: .72rem; }
     .feedback-button.selected { border-color: #9bb0ff; color: var(--blue-dark); background: #eff3ff; }
     .feedback-comment { width: min(420px, 100%); padding: 7px 9px; border: 1px solid #dfe5ef; border-radius: 8px; color: #46556a; font-size: .75rem; }
@@ -136,6 +159,8 @@
     .workspace-create { flex: 0 0 auto; padding: 7px 9px; border: 1px solid #dce5ff; border-radius: 8px; color: var(--blue-dark); background: #f5f7ff; font-size: .74rem; font-weight: 650; }
     .count-badge { min-width: 24px; padding: 3px 7px; border-radius: 999px; color: #526174; background: #f0f3f8; text-align: center; font-size: .72rem; font-weight: 700; }
     .side-copy { margin: 0 0 17px; color: var(--muted); font-size: .81rem; line-height: 1.55; }
+    .workflow-hint { margin: 0 0 14px; padding: 10px 11px; border-radius: 9px; color: #526174; background: #f7f8ff; font-size: .73rem; line-height: 1.55; }
+    .workflow-hint strong { color: #354359; }
     .drop-zone { padding: 18px 12px; border: 1.5px dashed #cbd4e1; border-radius: 12px; background: #fafbfe; text-align: center; transition: .15s ease; }
     .drop-zone.dragging { border-color: var(--blue); background: #f0f4ff; }
     .upload-symbol { width: 38px; height: 38px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 12px; color: var(--blue); background: #edf1ff; font-size: 1.1rem; }
@@ -162,6 +187,11 @@
     .file-status { margin-top: 5px; color: var(--muted); font-size: .75rem; line-height: 1.45; overflow-wrap: anywhere; }
     .file-status.error { color: #a12622; }
     .indexed-heading { margin: 18px 0 4px; color: #46556a; font-size: .82rem; font-weight: 680; }
+    .tools-disclosure { margin-top: 14px; }
+    .tools-disclosure .compare-controls { margin-top: 9px; }
+    .tools-disclosure .privacy-note { margin: 8px 2px; }
+    .privacy-disclosure { margin-top: 12px; }
+    .privacy-disclosure .privacy-note { margin-top: 8px; }
     .indexed-empty { padding: 8px 0; color: #929eae; font-size: .74rem; }
     .pipeline-disclosure { margin-bottom: 20px; }
     .pipeline-disclosure > summary { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border: 1px solid #e0e7f2; border-radius: 11px; color: #354359; background: #fff; cursor: pointer; font-size: .82rem; font-weight: 680; list-style: none; }
@@ -239,7 +269,6 @@
       main { padding-top: 22px; }
       .workspace { grid-template-columns: minmax(0, 1fr); }
       .chat-panel { min-height: 560px; }
-      .side-panel { grid-row: 1; }
       .drop-zone { display: grid; grid-template-columns: 38px 1fr; column-gap: 12px; text-align: left; align-items: center; }
       .upload-symbol { grid-row: 1 / span 2; margin: 0; }
       .drop-copy { margin: 0; }
@@ -269,7 +298,6 @@
       .page-heading { margin: 0 4px 17px; }
       .workspace { gap: 13px; }
       .side-panel { padding: 16px; }
-      .side-panel { grid-row: auto; }
       .pipeline-disclosure { margin-bottom: 14px; }
       .pipeline-disclosure > summary { min-height: 44px; padding: 9px 12px; }
       .pipeline-summary-status { display: none; }
@@ -330,10 +358,10 @@
     <div class="page-heading">
       <div class="eyebrow">Knowledge assistant</div>
       <h1>Ask your documents.</h1>
-      <p>Ask a question and the read-only agent plans focused searches across your indexed files. Inspect its tool trace and source excerpts; retrieved passages may not always support the generated answer.</p>
+      <p>Ask a question about files you have indexed. Each question is searched on its own, and answers include passages you can check.</p>
     </div>
-    <details class="pipeline-disclosure" open>
-      <summary>How the system works <span class="pipeline-summary-status" id="pipeline-summary-status">Sign in to see indexing activity.</span></summary>
+    <details class="pipeline-disclosure">
+      <summary>System details <span class="pipeline-summary-status" id="pipeline-summary-status">Sign in to see indexing activity.</span></summary>
     <section class="pipeline-panel" aria-labelledby="pipeline-title">
       <div class="pipeline-header">
         <div>
@@ -477,7 +505,6 @@
       </div>
       <p class="pipeline-note"><strong>What the agent does:</strong> For each question it plans focused searches, can compare two indexed documents when requested, combines evidence, then answers with citations. It cannot change or delete files, run arbitrary SQL, or call invoice extraction. Comparison is an exact paragraph diff, not semantic analysis. In offline mode, planning is deterministic rather than model-driven. Tool steps and sources appear under each agent answer.</p>
       <p class="pipeline-note"><strong>Structured extraction is a different task from RAG.</strong> Invoice extraction returns typed fields with quotations and deterministic plausibility warnings. It does not reconcile tax or line items; review consequential results.</p>
-      <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
     </section>
     </details>
     <div class="workspace">
@@ -496,8 +523,8 @@
           <div class="empty-state" id="empty-state">
             <div class="empty-icon" aria-hidden="true">✦</div>
             <h3>Ask about your documents</h3>
-            <p>Ask a standalone question about your indexed files. Earlier messages are not used as context; source passages help you verify the answer.</p>
-            <div class="suggestions" aria-label="Suggested questions">
+            <p id="empty-description">Upload a file in Your knowledge, then screen and approve it before asking questions.</p>
+            <div class="suggestions" id="suggestions" aria-label="Suggested questions" hidden>
               <button class="suggestion" type="button">Summarize my documents</button>
               <button class="suggestion" type="button">What are the key takeaways?</button>
               <button class="suggestion" type="button">Find important dates</button>
@@ -505,39 +532,45 @@
           </div>
         </div>
         <div class="composer-wrap">
-          <div class="retrieval-filters" aria-label="Retrieval filters">
-            <input id="source-filter" type="text" maxlength="500" placeholder="Filter by source name">
-            <select id="document-type-filter" aria-label="Document type">
-              <option value="">Any type</option>
-              <option value="text">Text</option>
-              <option value="markdown">Markdown</option>
-              <option value="csv">CSV</option>
-              <option value="pdf">PDF</option>
-              <option value="media">Audio/video</option>
-            </select>
-          </div>
-          <div class="retrieval-filters">
-            <label class="agent-toggle" for="agentic-enabled">
-              <input id="agentic-enabled" type="checkbox" checked>
-              <span><strong>Agentic research · enabled</strong>Plans focused searches, may compare two workspace documents, and shows its tool trace. Read-only; up to 3 searches per question.</span>
-            </label>
-          </div>
-          <div class="retrieval-filters">
-            <label class="sr-only" for="assistant-mode">Answer style</label>
-            <select id="assistant-mode" aria-label="Answer style">
-              <option value="general">General</option>
-              <option value="support">Troubleshooting support</option>
-              <option value="procedure">Step-by-step procedure</option>
-              <option value="summary">Concise summary</option>
-            </select>
-          </div>
+          <details class="advanced-settings">
+            <summary>Search options · filters, answer style, research mode</summary>
+            <div class="advanced-options">
+              <div class="retrieval-filters" aria-label="Retrieval filters">
+                <label class="sr-only" for="source-filter">Filter by file name</label>
+                <input id="source-filter" type="text" maxlength="500" placeholder="Filter by file name">
+                <select id="document-type-filter" aria-label="Filter by file type">
+                  <option value="">Any file type</option>
+                  <option value="text">Text</option>
+                  <option value="markdown">Markdown</option>
+                  <option value="csv">CSV</option>
+                  <option value="pdf">PDF</option>
+                  <option value="media">Audio/video</option>
+                </select>
+              </div>
+              <div class="retrieval-filters">
+                <label class="agent-toggle" for="agentic-enabled">
+                  <input id="agentic-enabled" type="checkbox" checked>
+                  <span><strong>Agent-assisted research</strong>On by default. Can plan focused searches and compare files; read-only, up to 3 searches.</span>
+                </label>
+              </div>
+              <div class="retrieval-filters">
+                <label class="sr-only" for="assistant-mode">Answer style</label>
+                <select id="assistant-mode" aria-label="Answer style">
+                  <option value="general">Answer style · General</option>
+                  <option value="support">Troubleshooting support</option>
+                  <option value="procedure">Step-by-step procedure</option>
+                  <option value="summary">Concise summary</option>
+                </select>
+              </div>
+            </div>
+          </details>
           <form class="ask" id="ask-form">
             <textarea id="question" name="question" rows="2" maxlength="10000" placeholder="Ask a standalone question about your files..." aria-label="Your question" required></textarea>
             <button class="send-button" id="ask-button" type="submit" aria-label="Send message" title="Send message">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5m0 0L6 11m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </form>
-          <div class="composer-hint"><span>Each question is searched independently · Enter to send · Shift + Enter for a new line</span><span>Answers may contain mistakes</span></div>
+          <div class="composer-hint"><span>Enter to send · Shift + Enter for a new line</span><span>Check the cited passages</span></div>
           <p class="chat-status" id="chat-status" role="status" aria-live="polite"></p>
         </div>
       </section>
@@ -553,8 +586,12 @@
           </select>
           <button class="workspace-create" id="workspace-create" type="button" disabled>New</button>
         </div>
-        <p class="side-copy">Add files to your private library, then index supported text, PDFs or audio/video to make them searchable.</p>
-        <p class="feedback-summary" id="feedback-summary" role="status">Answer feedback · loading…</p>
+        <p class="side-copy">Add files here. They become searchable after screening and your approval.</p>
+        <p class="workflow-hint"><strong>How it works:</strong> Upload a file, choose “Screen and request approval,” review the findings, then approve it to add it to search.</p>
+        <details class="feedback-details">
+          <summary>Workspace answer feedback</summary>
+          <p class="feedback-summary" id="feedback-summary" role="status">Answer feedback · loading…</p>
+        </details>
         <div class="drop-zone" id="drop-zone">
           <div class="upload-symbol" aria-hidden="true">↥</div>
           <p class="drop-copy"><strong>Drop files here</strong><br>or choose from your device</p>
@@ -563,7 +600,7 @@
                  aria-label="Choose files to upload">
           <input class="folder-input" id="folder-input" type="file" webkitdirectory directory multiple
                  aria-label="Choose a directory to upload">
-          <button class="upload-button" id="upload-button" type="button" disabled>Choose files to upload</button>
+          <button class="upload-button" id="upload-button" type="button" disabled>Choose files first</button>
           <button class="folder-button" id="folder-button" type="button" disabled>Choose folder</button>
           <p class="upload-limit">Each file can be up to 20 MiB. Supported formats: text, Markdown, CSV, text-based PDF, and supported Whisper media. Storage and indexed data each have a 1 GB limit.</p>
         </div>
@@ -579,16 +616,24 @@
           <p class="storage-message" id="storage-message" role="status" aria-live="polite">Each limit is 1 GB across all your workspaces.</p>
         </section>
         <ul class="file-list" id="file-list" aria-live="polite"></ul>
-        <h3 class="indexed-heading">Your stored files</h3>
-        <div class="compare-controls" aria-label="Compare two stored documents">
-          <select id="compare-first" aria-label="First document"><option value="">First document…</option></select>
-          <select id="compare-second" aria-label="Second document"><option value="">Second document…</option></select>
-          <button id="compare-button" type="button" disabled>Compare</button>
-        </div>
-        <p class="privacy-note">Exact added/removed paragraphs · 100,000 extracted characters maximum per file.</p>
-        <div id="compare-results" aria-live="polite"></div>
+        <h3 class="indexed-heading">Files in this workspace</h3>
         <ul class="file-list" id="indexed-file-list" aria-live="polite"></ul>
-        <div class="privacy-note"><strong>Private workspace.</strong> Original uploaded files are scanned by the private ClamAV service before extraction or transcription; a detection or scanner outage blocks processing. Extracted text and transcripts are sent to Infomaniak for evidence-based screening when you request indexing. Every item waits for your approval; the model returns indicators and uncertainty, not a fraud/safety verdict. Original audio/video sent for Whisper transcription is not redacted. Neither check guarantees that a document is safe.</div>
+        <h3 class="indexed-heading">Indexing and review</h3>
+        <ul class="job-list" id="indexing-job-list" aria-live="polite"></ul>
+        <details class="tools-disclosure">
+          <summary>Compare two documents</summary>
+          <div class="compare-controls" aria-label="Compare two stored documents">
+            <select id="compare-first" aria-label="First document"><option value="">First document…</option></select>
+            <select id="compare-second" aria-label="Second document"><option value="">Second document…</option></select>
+            <button id="compare-button" type="button" disabled>Compare</button>
+          </div>
+          <p class="privacy-note">Shows exact added and removed paragraphs, not a semantic comparison. Text, Markdown, CSV, and readable PDFs up to 100,000 extracted characters are supported.</p>
+          <div id="compare-results" aria-live="polite"></div>
+        </details>
+        <details class="privacy-disclosure">
+          <summary>Privacy and file screening</summary>
+          <div class="privacy-note"><strong>Private workspace.</strong> Uploaded originals are scanned for malware before extraction or transcription; a detection or scanner outage blocks processing. Extracted text is sent to Infomaniak for evidence-based screening when you request indexing. Every item waits for your approval; the model reports indicators and uncertainty, not a fraud/safety verdict. Original audio/video sent for Whisper transcription is not redacted. Neither check guarantees a document is safe.</div>
+        </details>
       </aside>
     </div>
   </main>
@@ -707,14 +752,19 @@
       const body = document.createElement("div");
       body.className = "message-body";
       body.textContent = text;
+      if (kind === "assistant" && (!sources || sources.length === 0)) {
+        const notice = document.createElement("p");
+        notice.className = "source-empty";
+        notice.textContent = "No supporting passages were returned. Try rephrasing or check that the relevant files have been indexed.";
+        body.append(notice);
+      }
       message.append(meta, body);
       if (agentResult) {
         const trace = document.createElement("details");
         trace.className = "agent-trace";
-        trace.open = true;
         const summary = document.createElement("summary");
         const completed = agentResult.steps.filter(step => step.status === "completed").length;
-        summary.textContent = `Agent run · ${completed} completed step${completed === 1 ? "" : "s"} · maximum ${agentResult.maxSteps}`;
+        summary.textContent = `How this answer was found · ${completed} completed step${completed === 1 ? "" : "s"}`;
         const steps = document.createElement("ol");
         for (const step of agentResult.steps) {
           const item = document.createElement("li");
@@ -788,6 +838,10 @@
         body.append(list);
       }
       if (kind === "assistant") {
+        const feedbackDetails = document.createElement("details");
+        feedbackDetails.className = "feedback-details";
+        const feedbackSummary = document.createElement("summary");
+        feedbackSummary.textContent = "Was this answer helpful?";
         const controls = document.createElement("div");
         controls.className = "feedback-controls";
         const helpful = document.createElement("button");
@@ -801,9 +855,11 @@
         const comment = document.createElement("input");
         comment.className = "feedback-comment";
         comment.maxLength = 2000;
-        comment.placeholder = "Optional feedback";
+        comment.setAttribute("aria-label", "Optional feedback comment");
+        comment.placeholder = "Optional comment";
         controls.append(helpful, unhelpful, comment);
-        message.append(controls);
+        feedbackDetails.append(feedbackSummary, controls);
+        message.append(feedbackDetails);
         for (const [button, isHelpful] of [[helpful, true], [unhelpful, false]]) {
           button.addEventListener("click", async () => {
             button.disabled = true;
@@ -860,7 +916,7 @@
       uploadButton.disabled = !isAuthenticated || files.length === 0 || exceedsQuota;
       uploadButton.textContent = files.length
         ? `Upload ${files.length} selected file${files.length === 1 ? "" : "s"}`
-        : "Choose files to upload";
+        : "Choose files first";
       if (exceedsQuota) {
         storageMessage.textContent = "These files exceed your remaining S3 space. Delete stored files before uploading.";
         storageMessage.classList.add("error");
@@ -939,8 +995,9 @@
       if (!storage.files.length) {
         const empty = document.createElement("li");
         empty.className = "indexed-empty";
-        empty.textContent = "No files in S3 yet.";
+        empty.textContent = "No files have been uploaded to this workspace yet.";
         indexedFileList.append(empty);
+        updateEmptyState(storage.files);
         updateFileSelection();
         return;
       }
@@ -1051,7 +1108,40 @@
         row.append(name, details, actions);
         indexedFileList.append(row);
       }
+      updateEmptyState(storage.files);
       updateFileSelection();
+    }
+
+    function updateEmptyState(files) {
+      const emptyState = document.getElementById("empty-state");
+      if (!emptyState) return;
+      const indexedCount = files.filter(file => file.indexed).length;
+      const activeJob = currentJobs.some(job => job.status === "QUEUED" || job.status === "PROCESSING");
+      const reviewPending = currentJobs.some(job => job.status === "AWAITING_APPROVAL");
+      const title = emptyState.querySelector("h3");
+      const description = document.getElementById("empty-description");
+      const suggestions = document.getElementById("suggestions");
+      if (indexedCount > 0) {
+        title.textContent = "Ask about your documents";
+        description.textContent = "Each question is searched independently. Check the source passages to verify an answer.";
+        suggestions.hidden = false;
+      } else if (reviewPending) {
+        title.textContent = "Review your file to make it searchable";
+        description.textContent = "Check the screening findings in Indexing and review, then approve the file before asking questions.";
+        suggestions.hidden = true;
+      } else if (activeJob) {
+        title.textContent = "Your file is being prepared";
+        description.textContent = "You can ask questions after screening and approval are complete.";
+        suggestions.hidden = true;
+      } else if (files.length > 0) {
+        title.textContent = "Your files are not searchable yet";
+        description.textContent = "Choose “Screen and request approval” next to a supported file. Review the findings and approve it to add it to search.";
+        suggestions.hidden = true;
+      } else {
+        title.textContent = "Start with a file";
+        description.textContent = "Upload a file in Your knowledge, then screen and approve it before asking questions.";
+        suggestions.hidden = true;
+      }
     }
 
     function updateCompareOptions(files) {
@@ -1498,6 +1588,7 @@
         const jobs = await responseJson(await apiFetch("/api/indexing-jobs"));
         currentJobs = jobs;
         renderIndexingJobs(jobs);
+        if (currentStorage) updateEmptyState(currentStorage.files);
         if (!jobs.some(job => job.status === "QUEUED" || job.status === "PROCESSING")) {
           await loadStorage();
         } else if (currentStorage) {
@@ -1602,8 +1693,9 @@
       } catch (error) {
         thinking.remove();
         addMessage(error.message, "assistant error");
-        chatStatus.textContent = "That question could not be answered. Please try again.";
+        chatStatus.textContent = "Your question is back in the box so you can edit it or try again.";
         chatStatus.classList.add("error");
+        questionInput.value = question;
         if (agentic) {
           agentStatus.textContent = `Last run failed · ${error.message}`;
         }
