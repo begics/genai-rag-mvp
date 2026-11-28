@@ -42,7 +42,7 @@ public class SecurityConfiguration {
   // CSP hashes authorize only the inline UI blocks; refresh them when those blocks change.
   private static final String CONTENT_SECURITY_POLICY =
       "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-          + "form-action 'self'; script-src 'self' 'sha256-EakEsylEQLbv6kKCAG2c+Ew2ClbHUsjOZpEb/K0e/vM='; "
+          + "form-action 'self'; script-src 'self' 'sha256-rZ3yej6GU+Jca04mqsY6hdhf2fbgto3BEvpUFMyrZ6w='; "
           + "style-src 'self' 'sha256-7v9J8q4Y2afrKLrZBHEfg5lNQ2IkafVPUrJLoHU1iyU='; "
           + "img-src 'self' data:; connect-src 'self'";
 

@@ -348,6 +348,19 @@ class SecurityConfigurationTest {
         .contains("This app receives complete provider responses rather than streaming visible tokens")
         .contains("Brij Pandey")
         .contains("token-by-token generation");
+    org.assertj.core.api.Assertions.assertThat(html)
+        .contains("The application developer selects the model and defines the harness")
+        .contains("Offline mode skips model planning and uses one fixed search query")
+        .contains("Regular chat bypasses the agent planner");
+    String demo;
+    try (var stream = getClass().getResourceAsStream("/static/demo.html")) {
+      org.assertj.core.api.Assertions.assertThat(stream).isNotNull();
+      demo = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    org.assertj.core.api.Assertions.assertThat(demo)
+        .contains("Who chooses the harness?")
+        .contains("The model does not discover or launch arbitrary tools")
+        .contains("This public demo itself uses prepared answers only");
   }
 
   @Test

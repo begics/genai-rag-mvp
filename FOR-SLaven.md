@@ -89,3 +89,20 @@ The test addition checks that the public demo can load the shared stylesheet and
 - When adapting a linked graphic, preserve the idea in an original composition, credit the inspiration, and avoid reusing the underlying image without permission.
 - A shared semantic structure is often more responsive and accessible than embedding a fixed-size infographic; keep the visual decoration separate from the meaning.
 - Check Content Security Policy when adding UI assets. Self-hosted external CSS can be allowed narrowly without broadening inline-script permissions.
+
+## Learning note: who selects the LLM harness and tools
+
+The model does not independently choose its harness or gain access to tools. The developer chooses a model and implements the surrounding harness: prompt construction, the list of permitted actions, argument validation, authorization checks, and the loop that decides whether to execute a requested action and send a result back. A helpful analogy is a menu: the model may select among presented options, but the application decides what is on the menu, checks the order, and performs it. This distinction is essential because a prompt telling a model not to do something is not an enforcement mechanism.
+
+The actual RAG application has two paths. Regular chat sends a question to the normal retrieval-and-answer service. When agent mode is selected, `/api/agent/query` invokes `AgentService`, which asks an `AgentPlanner` for a bounded plan; the Infomaniak planner emits structured JSON, while offline mode returns one deterministic search query. `AgentService` validates the plan and performs workspace-scoped searches, optionally comparing two eligible documents only when the user asks for comparison. The planner is not handed database access or arbitrary function execution. The client can select the app's agent path, but it does not select a runtime or install a new harness.
+
+The public demo should explain this distinction because it is a learning experience; the private app should state it briefly in its existing optional system map because that is where users can enable agent mode and inspect its trace. Keeping the explanation out of the chat composer avoids delaying the core task. The copy must also distinguish the public demo's prepared-answer prototype from the live private application's actual bounded planner and tools.
+
+Tests for this explanation are static-content assertions alongside the existing system-map and public-demo tests. These assertions guard against implying that the planner runs tools directly or that the demo makes live model calls. They do not prove the backend authorization behavior; that remains covered by the service and workspace-security tests.
+
+### Transferable lessons
+
+- The model proposes; application code authorizes and executes. Keep that responsibility visible to users and reviewers.
+- Describe the harness as more than a prompt: it includes tool definitions, validation, access controls, execution, and the return loop.
+- Explain the exact tools and limits this app implements rather than suggesting generic agent capabilities.
+- Keep educational details optional in the working UI, but make them easy to discover where a user enables the related feature.

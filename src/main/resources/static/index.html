@@ -438,6 +438,7 @@
           <li class="pipeline-step"><strong>Answer model</strong>Answers from evidence, or abstains when retrieval is empty</li>
           <li class="pipeline-step"><strong>Trace</strong>Shows plan, tool outcomes, duration, and sources with the answer</li>
         </ol>
+        <p class="pipeline-note"><strong>Who chooses the harness and tools?</strong> The application developer selects the model and defines the harness: its prompt, allowed actions, validation, and execution loop. The planner model proposes a bounded plan; it cannot discover or run arbitrary tools. The backend validates the plan, enforces workspace access, and runs only the read-only search/comparison actions shown above. Offline mode skips model planning and uses one fixed search query. Regular chat bypasses the agent planner.</p>
       </div>
       <div class="pipeline-lane">
         <h3 class="pipeline-lane-title">4 · Optional document workflows</h3>
@@ -1622,6 +1623,7 @@
       try {
         renderStorage(await responseJson(await apiFetch("/api/storage")));
       } catch (error) {
+        console.error("Could not load storage usage", error);
         const failure = document.createElement("li");
         failure.className = "indexed-empty file-status error";
         failure.textContent = `Could not load storage usage: ${error.message}`;
