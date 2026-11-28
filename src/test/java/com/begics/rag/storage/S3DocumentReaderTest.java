@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.begics.rag.domain.DocumentOcr;
+import com.begics.rag.domain.DocumentVision;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -34,8 +36,10 @@ class S3DocumentReaderTest {
   private final S3Client s3 = mock(S3Client.class);
   private final SpeechTranscription transcription = mock(SpeechTranscription.class);
   private final FileMalwareScanner malwareScanner = mock(FileMalwareScanner.class);
+  private final DocumentOcr ocr = mock(DocumentOcr.class);
+  private final DocumentVision vision = mock(DocumentVision.class);
   private final S3DocumentReader reader =
-      new S3DocumentReader(s3, "rag-documents", transcription, malwareScanner);
+      new S3DocumentReader(s3, "rag-documents", transcription, malwareScanner, ocr, () -> vision);
 
   @Test
   void readsUtf8ObjectFromConfiguredBucketAndKey() {
@@ -50,6 +54,90 @@ class S3DocumentReaderTest {
     when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(pdf("Text extracted from PDF")));
 
     assertThat(reader.read("notes.pdf")).contains("Text extracted from PDF");
+  }
+
+  @Test
+  void runsLocalOcrForAReadableImageAfterTheMalwareScan() throws IOException {
+    byte[] image = png();
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(image));
+    when(ocr.recognize(image)).thenReturn(new DocumentOcr.OcrResult("Recognized text from photo", 0.91));
+    java.util.List<S3DocumentReader.ReadStage> stages = new java.util.ArrayList<>();
+
+    assertThat(reader.read("uploads/workspace/photo.png", stages::add))
+        .isEqualTo("Recognized text from photo");
+
+    assertThat(stages).containsExactly(S3DocumentReader.ReadStage.OCR);
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(malwareScanner, ocr);
+    order.verify(malwareScanner).scan(image);
+    order.verify(ocr).recognize(image);
+    org.mockito.Mockito.verifyNoInteractions(vision);
+  }
+
+  @Test
+  void usesLocalVisionAndAnOriginalImageReviewWhenOcrIsUncertain() throws IOException {
+    byte[] image = png();
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(image));
+    when(ocr.recognize(image)).thenReturn(new DocumentOcr.OcrResult("weak OCR", 0.31));
+    when(vision.readOriginal("image/png", image, "weak OCR"))
+        .thenReturn(new DocumentVision.VisualText("Visible text from original", 0.88));
+    when(vision.verifyOriginal("image/png", image, "Visible text from original"))
+        .thenReturn(new DocumentVision.OriginalReview("Verified text from original", 0.93, true));
+    java.util.List<S3DocumentReader.ReadStage> stages = new java.util.ArrayList<>();
+
+    assertThat(reader.read("uploads/workspace/photo.png", stages::add))
+        .isEqualTo("Verified text from original");
+
+    assertThat(stages).containsExactly(
+        S3DocumentReader.ReadStage.OCR,
+        S3DocumentReader.ReadStage.VISUAL_ANALYSIS,
+        S3DocumentReader.ReadStage.ORIGINAL_REVIEW);
+    verify(vision).readOriginal("image/png", image, "weak OCR");
+    verify(vision).verifyOriginal("image/png", image, "Visible text from original");
+  }
+
+  @Test
+  void rejectsAnUnverifiedOriginalRatherThanPassingItToScreening() throws IOException {
+    byte[] image = png();
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(image));
+    when(ocr.recognize(image)).thenReturn(new DocumentOcr.OcrResult("weak OCR", 0.31));
+    when(vision.readOriginal("image/png", image, "weak OCR"))
+        .thenReturn(new DocumentVision.VisualText("Possible text", 0.88));
+    when(vision.verifyOriginal("image/png", image, "Possible text"))
+        .thenReturn(new DocumentVision.OriginalReview("Uncertain text", 0.4, false));
+
+    assertThatThrownBy(() -> reader.read("uploads/workspace/photo.png"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("could not verify the transcription")
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+  }
+
+  @Test
+  void failsClosedWhenLowConfidenceOcrHasNoLocalVisionModel() throws IOException {
+    byte[] image = png();
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(image));
+    when(ocr.recognize(image)).thenReturn(new DocumentOcr.OcrResult("weak OCR", 0.31));
+    S3DocumentReader withoutVision =
+        new S3DocumentReader(s3, "rag-documents", transcription, malwareScanner, ocr, () -> null);
+
+    assertThatThrownBy(() -> withoutVision.read("uploads/workspace/photo.png"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("requires a configured local vision model")
+        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
+        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+  }
+
+  @Test
+  void usesOcrForPdfPagesWithoutEmbeddedText() throws IOException {
+    when(s3.getObject(any(GetObjectRequest.class))).thenReturn(stream(pdfWithPages(1)));
+    when(ocr.recognize(any())).thenReturn(new DocumentOcr.OcrResult("Scanned page text", 0.87));
+    java.util.List<S3DocumentReader.ReadStage> stages = new java.util.ArrayList<>();
+
+    assertThat(reader.read("scanned.pdf", stages::add)).contains("Scanned page text");
+
+    assertThat(stages).containsExactly(S3DocumentReader.ReadStage.OCR);
+    verify(ocr).recognize(any());
+    org.mockito.Mockito.verifyNoInteractions(vision);
   }
 
   @Test
@@ -196,6 +284,16 @@ class S3DocumentReaderTest {
         content.endText();
       }
       document.save(output);
+      return output.toByteArray();
+    }
+  }
+
+  private static byte[] png() throws IOException {
+    try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      org.assertj.core.api.Assertions.assertThat(
+          javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(
+              32, 32, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", output))
+          .isTrue();
       return output.toByteArray();
     }
   }

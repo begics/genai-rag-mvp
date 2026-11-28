@@ -92,6 +92,18 @@ class PipelineInfoServiceTest {
   }
 
   @Test
+  void reportsTheHuggingFaceLlamaCppRerankerAlongsideLocalOllamaModels() {
+    var environment = new MockEnvironment()
+        .withProperty("rag.provider", "ollama")
+        .withProperty("rag.ollama.rerank-provider", "llamacpp");
+
+    var result = new PipelineInfoService(environment).current();
+
+    assertThat(result.rerankService()).isEqualTo("Local llama.cpp reranking API");
+    assertThat(result.rerankModel()).isEqualTo("paulalesius/Qwen3-Reranker-0.6B-GGUF:Q6_K");
+  }
+
+  @Test
   void keepsOfflineModeDeterministicAndDoesNotAdvertiseTheInfomaniakPlanner() {
     var environment = new MockEnvironment().withProperty("rag.provider", "offline");
 

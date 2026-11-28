@@ -137,6 +137,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  llama-reranker:
+    image: ghcr.io/ggml-org/llama.cpp:server-b12826
+    profiles: ["llama-reranker"]
+    restart: unless-stopped
+    command:
+      - --hf-repo
+      - paulalesius/Qwen3-Reranker-0.6B-GGUF
+      - --hf-file
+      - Qwen3-Reranker-0.6B.Q6_K.gguf
+      - --alias
+      - paulalesius/Qwen3-Reranker-0.6B-GGUF:Q6_K
+      - --reranking
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8081"
+      - --ctx-size
+      - "8192"
+      - --parallel
+      - "2"
+    volumes:
+      - "llama-reranker-cache:/root/.cache/llama.cpp"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 120s
   app:
     build: .
     restart: unless-stopped
@@ -163,6 +191,7 @@ services:
       CLAMAV_PORT: "3310"
       CLAMAV_TIMEOUT_MS: "30000"
       RAG_CACHE_REDIS_HOST: redis
+      RAG_LLAMACPP_RERANK_BASE_URL: http://llama-reranker:8081
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/rag
       KEYCLOAK_AUTHORIZATION_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/rag/protocol/openid-connect/auth
       KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/rag/protocol/openid-connect/token
@@ -198,6 +227,7 @@ services:
       - "portainer-data:/data"
 volumes:
   keycloak-data:
+  llama-reranker-cache:
   rag-data:
   rustfs-data:
   portainer-data:

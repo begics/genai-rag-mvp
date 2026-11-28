@@ -78,6 +78,14 @@ public class RagService {
     }
     return text;
   }
+
+  String readS3Document(String key, java.util.function.Consumer<S3DocumentReader.ReadStage> stageUpdater) {
+    String text = s3DocumentReader.read(key, stageUpdater);
+    if (text.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "S3 document contains no extractable text");
+    }
+    return text;
+  }
   public ApiModels.IngestResponse ingest(ApiModels.IngestRequest request) {
     return ingest(request, WorkspaceAccessService.LEGACY_WORKSPACE_ID);
   }

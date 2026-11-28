@@ -13,7 +13,8 @@ class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
           DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class,
-          InfomaniakGroundingVerifier.class, OfflineAgentPlannerConfiguration.class, OllamaAiModels.class)
+          InfomaniakGroundingVerifier.class, OfflineAgentPlannerConfiguration.class,
+          OllamaAiModels.class, VllmDocumentVisionConfiguration.class)
       .withBean(tools.jackson.databind.ObjectMapper.class, () -> JsonMapper.builder().build());
 
   @Test
@@ -69,6 +70,7 @@ class ModelConfigurationTest {
           assertThat(context).hasSingleBean(EmbeddingModel.class);
           assertThat(context).hasSingleBean(ChatModel.class);
           assertThat(context).hasSingleBean(StructuredChatModel.class);
+          assertThat(context).hasSingleBean(com.begics.rag.domain.DocumentVision.class);
           assertThat(context).hasSingleBean(Reranker.class);
           assertThat(context.getBean(Reranker.class)).isInstanceOf(OllamaReranker.class);
           assertThat(context).hasSingleBean(AgentPlanner.class);
@@ -79,6 +81,58 @@ class ModelConfigurationTest {
           assertThat(context.getBean(EmbeddingModel.class).modelId())
               .isEqualTo("ollama:embeddinggemma-2:test:768");
         });
+  }
+
+  @Test
+  void selectsHuggingFaceLlamaCppRerankerAlongsideLocalOllamaModels() {
+    contextRunner
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withPropertyValues(
+            "rag.provider=ollama",
+            "rag.ollama.rerank-provider=llamacpp",
+            "rag.ollama.base-url=http://localhost:11434",
+            "rag.llamacpp.rerank-base-url=http://localhost:8081",
+            "rag.ollama.embedding-dimensions=768")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(Reranker.class);
+          assertThat(context.getBean(Reranker.class)).isInstanceOf(LlamaCppReranker.class);
+          assertThat(context.getBean(Reranker.class)).isNotInstanceOf(InfomaniakReranker.class);
+          assertThat(context).hasSingleBean(EmbeddingModel.class);
+          assertThat(context).hasSingleBean(ChatModel.class);
+        });
+  }
+
+  @Test
+  void selectsLocalVllmOnlyWhenItsOpenAiCompatibleEndpointIsExplicitlyConfigured() {
+    contextRunner.withPropertyValues(
+        "rag.document-vision.provider=vllm",
+        "rag.document-vision.base-url=http://localhost:8000",
+        "rag.document-vision.model=Qwen/Qwen-VL")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(com.begics.rag.domain.DocumentVision.class);
+        });
+  }
+
+  @Test
+  void rejectsRemoteEndpointsForLocalOllamaVision() {
+    contextRunner.withPropertyValues(
+        "rag.provider=ollama",
+        "rag.ollama.base-url=https://models.example.com",
+        "rag.ollama.rerank-provider=ollama")
+        .run(context -> assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("Local document vision must use a loopback"));
+  }
+
+  @Test
+  void rejectsVllmVisionEndpointsContainingCredentials() {
+    contextRunner.withPropertyValues(
+        "rag.document-vision.provider=vllm",
+        "rag.document-vision.base-url=http://user:password@localhost:8000",
+        "rag.document-vision.model=Qwen/Qwen-VL")
+        .run(context -> assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("RAG_DOCUMENT_VISION_BASE_URL must be an HTTP(S) URL"));
   }
 
   @Test

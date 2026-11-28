@@ -36,8 +36,9 @@ public class PipelineInfoService {
           null);
     }
     if ("ollama".equalsIgnoreCase(provider)) {
-      boolean infomaniakReranker = "infomaniak".equalsIgnoreCase(
-          environment.getProperty("rag.ollama.rerank-provider", "infomaniak"));
+      String rerankProvider = environment.getProperty("rag.ollama.rerank-provider", "infomaniak");
+      boolean infomaniakReranker = "infomaniak".equalsIgnoreCase(rerankProvider);
+      boolean llamaCppReranker = "llamacpp".equalsIgnoreCase(rerankProvider);
       int contextTokens = environment.getProperty(
           "rag.ollama.context-tokens", Integer.class, 32_768);
       return new PipelineInfoResponse(
@@ -46,10 +47,14 @@ public class PipelineInfoService {
           environment.getProperty("rag.ollama.embedding-model", "embeddinggemma-2"),
           environment.getProperty("rag.ollama.embedding-dimensions", Integer.class, 768),
           infomaniakReranker ? "Infomaniak Cohere-compatible Rerank API"
+              : llamaCppReranker ? "Local llama.cpp reranking API"
               : "Local Ollama cross-encoder reranking API",
           environment.getProperty(
-              infomaniakReranker ? "rag.infomaniak.rerank-model" : "rag.ollama.rerank-model",
-              infomaniakReranker ? "Not configured" : "AuditAid/Qwen3_Reranker:0.6B_Q8"),
+              infomaniakReranker ? "rag.infomaniak.rerank-model"
+                  : llamaCppReranker ? "rag.llamacpp.rerank-model" : "rag.ollama.rerank-model",
+              infomaniakReranker ? "Not configured"
+                  : llamaCppReranker ? "paulalesius/Qwen3-Reranker-0.6B-GGUF:Q6_K"
+                      : "AuditAid/Qwen3_Reranker:0.6B_Q8"),
           "Ollama chat API",
           environment.getProperty("rag.ollama.chat-model", "gemma4:12b-mlx"),
           "Local Gemma structured-output planner · "

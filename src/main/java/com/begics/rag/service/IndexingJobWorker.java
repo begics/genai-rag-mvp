@@ -64,7 +64,12 @@ public class IndexingJobWorker {
           } else {
             jobs.updateStage(id, S3DocumentReader.isTranscribable(job.objectKey())
                 ? Stage.TRANSCRIBING : Stage.READING);
-            text = ragService.readS3Document(job.objectKey());
+            text = ragService.readS3Document(job.objectKey(), readStage ->
+                jobs.updateStage(id, switch (readStage) {
+                  case OCR -> Stage.OCR;
+                  case VISUAL_ANALYSIS -> Stage.VISUAL_ANALYSIS;
+                  case ORIGINAL_REVIEW -> Stage.ORIGINAL_REVIEW;
+                }));
             jobs.saveScreeningText(id, text);
           }
           if (job.screenedAt() == null) {

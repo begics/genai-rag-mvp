@@ -45,6 +45,37 @@ class OllamaAiModels {
   }
 
   @Bean
+  @ConditionalOnProperty(name = "rag.document-vision.provider", havingValue = "ollama", matchIfMissing = true)
+  com.begics.rag.domain.DocumentVision ollamaDocumentVision(
+      Environment environment, ObjectMapper objectMapper) {
+    String visionModel = environment.getProperty(
+        "rag.document-vision.model",
+        environment.getProperty("rag.ollama.chat-model", "gemma4:12b-mlx"));
+    String reviewModel = environment.getProperty("rag.document-vision.review-model", visionModel);
+    if (visionModel.isBlank()) {
+      visionModel = environment.getProperty("rag.ollama.chat-model", "gemma4:12b-mlx");
+    }
+    if (reviewModel.isBlank()) {
+      reviewModel = visionModel;
+    }
+    int timeoutMs = environment.getProperty(
+        "rag.document-vision.timeout-ms", Integer.class,
+        environment.getProperty("rag.ollama.request-timeout-ms", Integer.class, 180_000));
+    String baseUrl = environment.getProperty("rag.ollama.base-url", "http://host.docker.internal:11434");
+    if (timeoutMs < 1) {
+      throw new IllegalStateException("RAG_DOCUMENT_VISION_TIMEOUT_MS must be positive");
+    }
+    validateSettings(baseUrl, timeoutMs);
+    validateLocalVisionUrl(baseUrl);
+    return new LocalDocumentVision(
+        RestClient.builder()
+            .baseUrl(baseUrl)
+            .requestFactory(createRequestFactory(timeoutMs))
+            .build(),
+        LocalDocumentVision.Protocol.OLLAMA, visionModel, reviewModel, objectMapper, contextTokens(environment));
+  }
+
+  @Bean
   EmbeddingModel ollamaEmbeddingModel(
       RestClient ollamaRestClient, Environment environment, ObjectMapper objectMapper) {
     String model = environment.getProperty("rag.ollama.embedding-model", "embeddinggemma-2");
@@ -89,6 +120,32 @@ class OllamaAiModels {
       throw new IllegalStateException("RAG_OLLAMA_RERANK_MODEL must not be blank");
     }
     return new OllamaReranker(ollamaRestClient, model, objectMapper);
+  }
+
+  @Bean
+  @ConditionalOnProperty(name = "rag.ollama.rerank-provider", havingValue = "llamacpp")
+  Reranker llamaCppReranker(
+      Environment environment) {
+    String baseUrl = environment.getProperty(
+        "rag.llamacpp.rerank-base-url", "http://localhost:8081");
+    int timeoutMs = environment.getProperty(
+        "rag.llamacpp.rerank-timeout-ms", Integer.class, 180_000);
+    String model = environment.getProperty(
+        "rag.llamacpp.rerank-model",
+        "paulalesius/Qwen3-Reranker-0.6B-GGUF:Q6_K");
+    validateSettings(baseUrl, timeoutMs);
+    if (model.isBlank()) {
+      throw new IllegalStateException("RAG_LLAMACPP_RERANK_MODEL must not be blank");
+    }
+    Duration timeout = Duration.ofMillis(timeoutMs);
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(timeout);
+    RestClient rerankerClient = RestClient.builder()
+        .baseUrl(baseUrl)
+        .requestFactory(requestFactory)
+        .build();
+    return new LlamaCppReranker(rerankerClient, model);
   }
 
   @Bean
@@ -185,6 +242,23 @@ class OllamaAiModels {
     } catch (IllegalArgumentException exception) {
       throw new IllegalStateException(
           "RAG_OLLAMA_BASE_URL must be an HTTP(S) URL without credentials or query parameters", exception);
+    }
+  }
+
+  private static JdkClientHttpRequestFactory createRequestFactory(int timeoutMs) {
+    Duration timeout = Duration.ofMillis(timeoutMs);
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(timeout);
+    return requestFactory;
+  }
+
+  private static void validateLocalVisionUrl(String baseUrl) {
+    URI uri = URI.create(baseUrl);
+    String host = uri.getHost().toLowerCase(java.util.Locale.ROOT);
+    if (!host.equals("localhost") && !host.equals("host.docker.internal")
+        && !host.equals("127.0.0.1") && !host.equals("::1") && !host.equals("[::1]")) {
+      throw new IllegalStateException("Local document vision must use a loopback or host.docker.internal endpoint");
     }
   }
 }

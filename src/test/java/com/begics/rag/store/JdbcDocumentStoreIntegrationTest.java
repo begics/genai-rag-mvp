@@ -179,6 +179,9 @@ class JdbcDocumentStoreIntegrationTest {
     assertThat(created.submittedBy()).isEqualTo("submitter");
     assertThat(jobs.markProcessing(created.id())).isTrue();
     jobs.saveScreeningText(created.id(), "screened text");
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.OCR);
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.VISUAL_ANALYSIS);
+    jobs.updateStage(created.id(), IndexingJobStore.Stage.ORIGINAL_REVIEW);
     jobs.updateStage(created.id(), IndexingJobStore.Stage.SCREENING);
     jobs.awaitApproval(created.id(), "screened text", "[]");
     var pending = jobs.get(created.id(), workspaceId).orElseThrow();

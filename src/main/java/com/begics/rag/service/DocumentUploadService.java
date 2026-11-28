@@ -30,6 +30,9 @@ public class DocumentUploadService {
       Map.entry("md", new FileType("text/markdown", true)),
       Map.entry("csv", new FileType("text/csv", true)),
       Map.entry("pdf", new FileType("application/pdf", true)),
+      Map.entry("png", new FileType("image/png", true)),
+      Map.entry("jpg", new FileType("image/jpeg", true)),
+      Map.entry("jpeg", new FileType("image/jpeg", true)),
       Map.entry("mp4", new FileType("video/mp4", false, true)),
       Map.entry("webm", new FileType("video/webm", false, true)),
       Map.entry("mp3", new FileType("audio/mpeg", false, true)),
@@ -80,7 +83,7 @@ public class DocumentUploadService {
     FileType fileType = ALLOWED_TYPES.get(extension);
     if (fileType == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "Supported file types are text, PDF, video, and audio files");
+          "Supported file types are text, PDF, PNG/JPEG images, video, and audio files");
     }
     validateContent(file, extension);
     storageQuota.checkS3Upload(subject, workspaceId, file.getSize());
@@ -175,6 +178,10 @@ public class DocumentUploadService {
   private static boolean matchesSignature(String extension, byte[] bytes) {
     return switch (extension) {
       case "pdf" -> startsWith(bytes, "%PDF-".getBytes(StandardCharsets.US_ASCII));
+      case "png" -> startsWith(bytes,
+          new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a});
+      case "jpg", "jpeg" -> bytes.length >= 3
+          && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8 && (bytes[2] & 0xff) == 0xff;
       case "mp4", "m4a", "m4v", "mov" -> bytes.length >= 12
           && asciiAt(bytes, 4, "ftyp")
           && (!extension.equals("mov") || asciiAt(bytes, 8, "qt  "));

@@ -59,6 +59,10 @@ app.antivirus:
   host: ${CLAMAV_HOST:localhost}
   port: ${CLAMAV_PORT:3310}
   timeout-ms: ${CLAMAV_TIMEOUT_MS:30000}
+app.ocr:
+  command: ${RAG_OCR_COMMAND:tesseract}
+  languages: ${RAG_OCR_LANGUAGES:eng+deu}
+  timeout-ms: ${RAG_OCR_TIMEOUT_MS:30000}
 management.endpoints.web.exposure.include: health,info,metrics
 management.endpoint.health.probes.enabled: true
 server.forward-headers-strategy: framework
@@ -84,6 +88,16 @@ rag:
     rerank-model: ${RAG_OLLAMA_RERANK_MODEL:AuditAid/Qwen3_Reranker:0.6B_Q8}
     request-timeout-ms: ${RAG_OLLAMA_REQUEST_TIMEOUT_MS:180000}
     embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:768}
+  document-vision:
+    provider: ${RAG_DOCUMENT_VISION_PROVIDER:ollama}
+    base-url: ${RAG_DOCUMENT_VISION_BASE_URL:http://host.docker.internal:8000}
+    model: ${RAG_DOCUMENT_VISION_MODEL:}
+    review-model: ${RAG_DOCUMENT_REVIEW_MODEL:}
+    timeout-ms: ${RAG_DOCUMENT_VISION_TIMEOUT_MS:180000}
+  llamacpp:
+    rerank-base-url: ${RAG_LLAMACPP_RERANK_BASE_URL:http://localhost:8081}
+    rerank-model: ${RAG_LLAMACPP_RERANK_MODEL:paulalesius/Qwen3-Reranker-0.6B-GGUF:Q6_K}
+    rerank-timeout-ms: ${RAG_LLAMACPP_RERANK_TIMEOUT_MS:180000}
   embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
   guardrails:
     denied-topics: ${RAG_GUARDRAILS_DENIED_TOPICS:}

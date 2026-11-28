@@ -45,6 +45,24 @@ class DocumentUploadServiceTest {
   }
 
   @Test
+  void uploadsPngAndJpegPhotosAsIndexableFiles() {
+    var png = new MockMultipartFile("file", "scan.png", "application/octet-stream",
+        new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a});
+    var jpeg = new MockMultipartFile("file", "photo.jpeg", "application/octet-stream",
+        new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff});
+
+    var uploadedPng = service.upload(png);
+    var uploadedJpeg = service.upload(jpeg);
+
+    assertThat(uploadedPng.contentType()).isEqualTo("image/png");
+    assertThat(uploadedPng.indexable()).isTrue();
+    assertThat(uploadedJpeg.contentType()).isEqualTo("image/jpeg");
+    assertThat(uploadedJpeg.indexable()).isTrue();
+    verify(objectWriter).write(uploadedPng.key(), "image/png", png);
+    verify(objectWriter).write(uploadedJpeg.key(), "image/jpeg", jpeg);
+  }
+
+  @Test
   void acceptsFilesAtTheTwentyMebibyteUploadLimit() {
     byte[] content = new byte[20 * 1024 * 1024];
     java.util.Arrays.fill(content, (byte) 'a');
@@ -163,11 +181,16 @@ class DocumentUploadServiceTest {
         "file", "notes.pdf", "application/pdf", "not a pdf".getBytes(StandardCharsets.UTF_8));
     MockMultipartFile invalidUtf8 = new MockMultipartFile(
         "file", "notes.txt", "text/plain", new byte[] {(byte) 0xc3, (byte) 0x28});
+    MockMultipartFile invalidImage = new MockMultipartFile(
+        "file", "photo.jpg", "image/jpeg", "not a JPEG".getBytes(StandardCharsets.UTF_8));
 
     assertThatThrownBy(() -> service.upload(executable))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("does not match");
     assertThatThrownBy(() -> service.upload(invalidUtf8))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("does not match");
+    assertThatThrownBy(() -> service.upload(invalidImage))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("does not match");
     verifyNoInteractions(objectWriter);
