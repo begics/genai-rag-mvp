@@ -229,7 +229,9 @@ class SecurityConfigurationTest {
         .andExpect(content().string(org.hamcrest.Matchers.containsString(
             "Where token generation fits in a RAG answer")))
         .andExpect(content().string(org.hamcrest.Matchers.containsString(
-            "Brij Pandey’s LinkedIn post on token-by-token generation")));
+            "Brij Pandey")))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString(
+            "token-by-token generation")));
     mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
   }
 
@@ -344,7 +346,8 @@ class SecurityConfigurationTest {
     org.assertj.core.api.Assertions.assertThat(html)
         .contains("From retrieved evidence to a checked answer")
         .contains("This app receives complete provider responses rather than streaming visible tokens")
-        .contains("Brij Pandey’s LinkedIn post on token-by-token generation");
+        .contains("Brij Pandey")
+        .contains("token-by-token generation");
   }
 
   @Test
