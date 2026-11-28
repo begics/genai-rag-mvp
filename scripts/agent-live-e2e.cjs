@@ -21,6 +21,9 @@ function requiredEnv(name) {
 
 async function authenticatedPage(browser) {
   const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
+  page.on("pageerror", (error) => {
+    console.error(`Browser page error: ${error.message}`);
+  });
   page.on("response", (response) => {
     if (new URL(response.url()).pathname === "/login/oauth2/code/keycloak") {
       console.log(`Authentication callback HTTP ${response.status()}.`);
@@ -354,6 +357,11 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error(`Live browser E2E failed: ${error.message}`);
+  console.error(`Live browser E2E failed: ${error.stack || error.message}`);
+  if (error instanceof AggregateError) {
+    for (const [index, cause] of error.errors.entries()) {
+      console.error(`Failure ${index + 1}: ${cause.stack || cause.message}`);
+    }
+  }
   process.exitCode = 1;
 });
