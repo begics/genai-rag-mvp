@@ -47,6 +47,9 @@ public class AgentService {
     AgentPlanner.AgentPlan plan;
     try {
       plan = planner.plan(request.question(), plannerDocuments);
+    } catch (AgentPlanner.PlannerUnavailableException exception) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+          "Agent planner is unavailable", exception);
     } catch (AgentPlanner.InvalidPlanException exception) {
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
           "Agent planner returned invalid structured output", exception);

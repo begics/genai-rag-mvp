@@ -60,6 +60,12 @@ rag:
   provider: ${RAG_PROVIDER:offline}
   provider-limits:
     max-concurrent-calls: ${RAG_PROVIDER_MAX_CONCURRENT_CALLS:8}
+  offline-agent-planner:
+    provider: ${RAG_OFFLINE_AGENT_PLANNER:deterministic}
+    ollama:
+      base-url: ${RAG_OFFLINE_AGENT_PLANNER_BASE_URL:http://host.docker.internal:11434}
+      model: ${RAG_OFFLINE_AGENT_PLANNER_MODEL:gemma4:31b}
+      timeout-ms: ${RAG_OFFLINE_AGENT_PLANNER_TIMEOUT_MS:180000}
   embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:3584}
   guardrails:
     denied-topics: ${RAG_GUARDRAILS_DENIED_TOPICS:}

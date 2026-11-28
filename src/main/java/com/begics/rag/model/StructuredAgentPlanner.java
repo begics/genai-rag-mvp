@@ -8,7 +8,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-final class InfomaniakAgentPlanner implements AgentPlanner {
+final class StructuredAgentPlanner implements AgentPlanner {
   private static final Set<String> PLAN_FIELDS =
       Set.of("searchQueries", "firstDocumentId", "secondDocumentId", "comparisonRationale");
   private static final String SCHEMA = """
@@ -33,7 +33,7 @@ final class InfomaniakAgentPlanner implements AgentPlanner {
   private final StructuredChatModel chat;
   private final ObjectMapper objectMapper;
 
-  InfomaniakAgentPlanner(StructuredChatModel chat, ObjectMapper objectMapper) {
+  StructuredAgentPlanner(StructuredChatModel chat, ObjectMapper objectMapper) {
     this.chat = chat;
     this.objectMapper = objectMapper;
   }

@@ -15,6 +15,12 @@ public interface AgentPlanner {
     }
   }
 
+  final class PlannerUnavailableException extends IllegalStateException {
+    public PlannerUnavailableException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
   record AgentPlan(
       List<String> searchQueries,
       String firstDocumentId,

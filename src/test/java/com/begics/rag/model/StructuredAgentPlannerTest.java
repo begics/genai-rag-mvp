@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 
-class InfomaniakAgentPlannerTest {
+class StructuredAgentPlannerTest {
   @Test
   void requestsBoundedStrictlyStructuredPlansWithOnlyWorkspaceDocuments() {
     StructuredChatModel chat = Mockito.mock(StructuredChatModel.class);
@@ -24,7 +24,7 @@ class InfomaniakAgentPlannerTest {
         """;
     when(chat.answerWithSchema(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
         .thenReturn(output);
-    InfomaniakAgentPlanner planner = new InfomaniakAgentPlanner(chat, JsonMapper.builder().build());
+    StructuredAgentPlanner planner = new StructuredAgentPlanner(chat, JsonMapper.builder().build());
 
     AgentPlanner.AgentPlan plan = planner.plan("Compare employee leave policies", List.of(
         new AgentPlanner.AgentDocument("doc-1", "leave-2025.pdf", "pdf"),
@@ -49,7 +49,7 @@ class InfomaniakAgentPlannerTest {
             """);
 
     AgentPlanner.AgentPlan plan =
-        new InfomaniakAgentPlanner(chat, JsonMapper.builder().build()).plan("Kündigungsfrist?", List.of());
+        new StructuredAgentPlanner(chat, JsonMapper.builder().build()).plan("Kündigungsfrist?", List.of());
 
     assertThat(plan.searchQueries()).containsExactly("Wo steht die Kündigungsfrist?");
     assertThat(plan.firstDocumentId()).isNull();
@@ -64,7 +64,7 @@ class InfomaniakAgentPlannerTest {
             {"searchQueries":["missing information"],"firstDocumentId":null,
              "secondDocumentId":null,"comparisonRationale":null}
             """);
-    AgentPlanner planner = new InfomaniakAgentPlanner(chat, JsonMapper.builder().build());
+    AgentPlanner planner = new StructuredAgentPlanner(chat, JsonMapper.builder().build());
 
     planner.plan("What is not in my files?", List.of());
 
@@ -96,7 +96,7 @@ class InfomaniakAgentPlannerTest {
       }
     };
 
-    new InfomaniakAgentPlanner(chat, JsonMapper.builder().build()).plan(hostileQuestion, List.of(
+    new StructuredAgentPlanner(chat, JsonMapper.builder().build()).plan(hostileQuestion, List.of(
         new AgentPlanner.AgentDocument("known-id", hostileFilename, "txt")));
 
     assertThat(instructions.get())
@@ -168,7 +168,7 @@ class InfomaniakAgentPlannerTest {
     when(chat.answerWithSchema(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
         .thenThrow(new IllegalStateException("provider unavailable"));
 
-    assertThatThrownBy(() -> new InfomaniakAgentPlanner(chat, JsonMapper.builder().build())
+    assertThatThrownBy(() -> new StructuredAgentPlanner(chat, JsonMapper.builder().build())
         .plan("question", List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("provider unavailable");
@@ -182,7 +182,7 @@ class InfomaniakAgentPlannerTest {
   }
 
   private static void assertInvalidOutput(StructuredChatModel chat) {
-    assertThatThrownBy(() -> new InfomaniakAgentPlanner(chat, JsonMapper.builder().build())
+    assertThatThrownBy(() -> new StructuredAgentPlanner(chat, JsonMapper.builder().build())
         .plan("question", List.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("Agent planner returned invalid structured output");

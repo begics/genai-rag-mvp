@@ -55,4 +55,17 @@ class PipelineInfoServiceTest {
     assertThat(result.agentPlanner()).contains("Deterministic local single-query planner");
     assertThat(result.agentPlanner()).doesNotContain(DEFAULT_PLANNER_MODEL);
   }
+
+  @Test
+  void reportsTheOptionalOfflineOllamaPlannerSeparatelyFromTheOfflineChatModel() {
+    var environment = new MockEnvironment()
+        .withProperty("rag.provider", "offline")
+        .withProperty("rag.offline-agent-planner.provider", "ollama")
+        .withProperty("rag.offline-agent-planner.ollama.model", "gemma4:31b");
+
+    var result = new PipelineInfoService(environment).current();
+
+    assertThat(result.agentPlanner()).contains("Local Ollama planner · gemma4:31b");
+    assertThat(result.chatModel()).isEqualTo("canned demo response");
+  }
 }

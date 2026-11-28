@@ -33,6 +33,12 @@ public class PipelineInfoService {
           "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
           3);
     }
+    String planner = "ollama".equalsIgnoreCase(
+        environment.getProperty("rag.offline-agent-planner.provider", "deterministic"))
+            ? "Local Ollama planner · "
+                + environment.getProperty("rag.offline-agent-planner.ollama.model", "gemma4:31b")
+                + " · configured, not live health-checked"
+            : "Deterministic local single-query planner · no provider calls";
     return new PipelineInfoResponse(
         "Offline demo mode",
         "Deterministic local embedding implementation",
@@ -42,7 +48,7 @@ public class PipelineInfoService {
         "pass-through",
         "No external chat LLM call",
         "canned demo response",
-        "Deterministic local single-query planner · no provider calls",
+        planner,
         "Workspace hybrid search; indexed text/Markdown/CSV/PDF paragraph comparison",
         3);
   }

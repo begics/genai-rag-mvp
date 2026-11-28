@@ -88,7 +88,7 @@ public class InfomaniakAiModels {
       ProviderCallLimiter limiter) {
     StructuredChatModel plannerChat =
         structuredChatModel(properties, properties.agentPlannerModel(), redactor, limiter);
-    return new InfomaniakAgentPlanner(plannerChat, objectMapper);
+    return new StructuredAgentPlanner(plannerChat, objectMapper);
   }
 
   @Bean

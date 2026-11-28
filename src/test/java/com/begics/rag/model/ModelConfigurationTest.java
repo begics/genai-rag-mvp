@@ -3,16 +3,17 @@ package com.begics.rag.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import java.time.Duration;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 class ModelConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(
           DeterministicModels.class, InfomaniakAiModels.class, InfomaniakSpeechTranscription.class,
-          InfomaniakGroundingVerifier.class)
+          InfomaniakGroundingVerifier.class, OfflineAgentPlannerConfiguration.class)
       .withBean(tools.jackson.databind.ObjectMapper.class, () -> JsonMapper.builder().build());
 
   @Test
@@ -31,6 +32,37 @@ class ModelConfigurationTest {
   void offlineEmbeddingDimensionMatchesTheConfiguredPgvectorDimension() {
     contextRunner.withPropertyValues("rag.provider=offline", "rag.embedding-dimensions=768").run(context ->
         assertThat(context.getBean(EmbeddingModel.class).embed("test")).hasSize(768));
+  }
+
+  @Test
+  void selectsOllamaOnlyWhenExplicitlyConfiguredAndKeepsOtherOfflineModels() {
+    contextRunner
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withPropertyValues(
+            "rag.provider=offline",
+            "rag.offline-agent-planner.provider=ollama",
+            "rag.offline-agent-planner.ollama.base-url=http://localhost:11434",
+            "rag.offline-agent-planner.ollama.model=gemma4:test")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(AgentPlanner.class)).isInstanceOf(StructuredAgentPlanner.class);
+          assertThat(context.getBean(EmbeddingModel.class)).isNotNull();
+          assertThat(context.getBean(ChatModel.class)).isNotNull();
+          assertThat(context).doesNotHaveBean(StructuredChatModel.class);
+          assertThat(context.getBean(Reranker.class)).isNotNull();
+        });
+  }
+
+  @Test
+  void rejectsInvalidOllamaBaseUrlsAtStartup() {
+    contextRunner
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withPropertyValues(
+            "rag.provider=offline",
+            "rag.offline-agent-planner.provider=ollama",
+            "rag.offline-agent-planner.ollama.base-url=http://localhost:11434?invalid=true")
+        .run(context -> assertThat(context).hasFailed().getFailure()
+            .hasMessageContaining("BASE_URL must be an HTTP(S) URL"));
   }
 
   @Test

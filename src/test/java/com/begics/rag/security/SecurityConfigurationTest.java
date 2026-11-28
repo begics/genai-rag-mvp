@@ -350,7 +350,7 @@ class SecurityConfigurationTest {
         .contains("token-by-token generation");
     org.assertj.core.api.Assertions.assertThat(html)
         .contains("The application developer selects the model and defines the harness")
-        .contains("Offline mode skips model planning and uses one fixed search query")
+        .contains("Offline mode uses one fixed search query unless the optional local Ollama planner is explicitly enabled")
         .contains("Regular chat bypasses the agent planner");
     String demo;
     try (var stream = getClass().getResourceAsStream("/static/demo.html")) {

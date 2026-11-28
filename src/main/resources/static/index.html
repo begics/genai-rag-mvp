@@ -438,7 +438,7 @@
           <li class="pipeline-step"><strong>Answer model</strong>Answers from evidence, or abstains when retrieval is empty</li>
           <li class="pipeline-step"><strong>Trace</strong>Shows plan, tool outcomes, duration, and sources with the answer</li>
         </ol>
-        <p class="pipeline-note"><strong>Who chooses the harness and tools?</strong> The application developer selects the model and defines the harness: its prompt, allowed actions, validation, and execution loop. The planner model proposes a bounded plan; it cannot discover or run arbitrary tools. The backend validates the plan, enforces workspace access, and runs only the read-only search/comparison actions shown above. Offline mode skips model planning and uses one fixed search query. Regular chat bypasses the agent planner.</p>
+        <p class="pipeline-note"><strong>Who chooses the harness and tools?</strong> The application developer selects the model and defines the harness: its prompt, allowed actions, validation, and execution loop. The planner model proposes a bounded plan; it cannot discover or run arbitrary tools. The backend validates the plan, enforces workspace access, and runs only the read-only search/comparison actions shown above. Offline mode uses one fixed search query unless the optional local Ollama planner is explicitly enabled. Regular chat bypasses the agent planner.</p>
       </div>
       <div class="pipeline-lane">
         <h3 class="pipeline-lane-title">4 · Optional document workflows</h3>
@@ -489,7 +489,7 @@
             <li><strong>Embeddings:</strong> index chunks and questions using the same configured model</li>
             <li><strong>Reranker:</strong> reorders retrieved candidates before answer generation</li>
             <li><strong>Chat model:</strong> grounded answers and structured invoice extraction</li>
-            <li><strong>Planner and document screening:</strong> Infomaniak structured-output model; offline planning is deterministic, but screening is unavailable and fails closed</li>
+            <li><strong>Planner and document screening:</strong> Infomaniak structured-output model; offline planning is deterministic unless local Ollama is enabled, while screening remains unavailable and fails closed</li>
             <li><strong>Whisper transcription:</strong> optional provider path for supported media</li>
           </ul>
         </section>
@@ -523,7 +523,7 @@
           </ul>
         </section>
       </div>
-      <p class="pipeline-note"><strong>What the agent does:</strong> For each question it plans focused searches, can compare two indexed documents when requested, combines evidence, then answers with citations. It cannot change or delete files, run arbitrary SQL, or call invoice extraction. Comparison is an exact paragraph diff, not semantic analysis. In offline mode, planning is deterministic rather than model-driven. Tool steps and sources appear under each agent answer.</p>
+      <p class="pipeline-note"><strong>What the agent does:</strong> For each question it plans focused searches, can compare two indexed documents when requested, combines evidence, then answers with citations. It cannot change or delete files, run arbitrary SQL, or call invoice extraction. Comparison is an exact paragraph diff, not semantic analysis. In offline mode, planning is deterministic unless the optional local Ollama planner is enabled. Tool steps and sources appear under each agent answer.</p>
       <p class="pipeline-note"><strong>Structured extraction is a different task from RAG.</strong> Invoice extraction returns typed fields with quotations and deterministic plausibility warnings. It does not reconcile tax or line items; review consequential results.</p>
     </section>
     </details>
@@ -1139,8 +1139,8 @@
       const activeJob = currentJobs.some(job => job.status === "QUEUED" || job.status === "PROCESSING");
       const reviewPending = currentJobs.some(job => job.status === "AWAITING_APPROVAL");
       const title = emptyState.querySelector("h3");
-      const description = document.getElementById("empty-description");
-      const suggestions = document.getElementById("suggestions");
+      const description = emptyState.querySelector("#empty-description");
+      const suggestions = emptyState.querySelector("#suggestions");
       if (indexedCount > 0) {
         title.textContent = "Ask about your documents";
         description.textContent = "Each question is searched independently. Check the source passages to verify an answer.";
@@ -1314,9 +1314,11 @@
       const title = document.createElement("h3");
       title.textContent = "Ask about your documents";
       const description = document.createElement("p");
+      description.id = "empty-description";
       description.textContent = "Ask a standalone question about your indexed files. Earlier messages are not used as context; source passages help you verify the answer.";
       const suggestions = document.createElement("div");
       suggestions.className = "suggestions";
+      suggestions.id = "suggestions";
       suggestions.setAttribute("aria-label", "Suggested questions");
       for (const text of ["Summarize my documents", "What are the key takeaways?", "Find important dates"]) {
         const suggestion = document.createElement("button");

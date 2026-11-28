@@ -46,7 +46,7 @@ class AgentPlanningFlowTest {
   private final DocumentCompareService comparison = Mockito.mock(DocumentCompareService.class);
   private final WorkspaceAccessService workspaces = Mockito.mock(WorkspaceAccessService.class);
   private final AgentPlanner planner =
-      new InfomaniakAgentPlanner(plannerChat, JsonMapper.builder().build());
+      new StructuredAgentPlanner(plannerChat, JsonMapper.builder().build());
   private final AgentService agent = new AgentService(planner, documents, rag, comparison);
   private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AgentController(agent, workspaces))
       .setControllerAdvice(new ValidationAdvice())
@@ -280,6 +280,24 @@ class AgentPlanningFlowTest {
             .content("{\"question\":\"Find something\"}"))
         .andExpect(status().isBadGateway())
         .andExpect(jsonPath("$.error").value("planner unavailable"));
+
+    verify(rag).validateQuestion("Find something");
+    Mockito.verifyNoMoreInteractions(rag);
+    verifyNoInteractions(comparison);
+  }
+
+  @Test
+  void reportsAnUnavailableLocalPlannerAsServiceUnavailable() throws Exception {
+    when(plannerChat.answerWithSchema(anyString(), anyString(), anyString()))
+        .thenThrow(new AgentPlanner.PlannerUnavailableException("local planner unavailable",
+            new IllegalStateException("connection refused")));
+
+    mvc.perform(post("/api/agent/query")
+            .header("X-Workspace-ID", WORKSPACE_HEADER)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"question\":\"Find something\"}"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.error").value("Agent planner is unavailable"));
 
     verify(rag).validateQuestion("Find something");
     Mockito.verifyNoMoreInteractions(rag);

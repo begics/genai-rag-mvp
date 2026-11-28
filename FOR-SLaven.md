@@ -90,6 +90,24 @@ The test addition checks that the public demo can load the shared stylesheet and
 - A shared semantic structure is often more responsive and accessible than embedding a fixed-size infographic; keep the visual decoration separate from the meaning.
 - Check Content Security Policy when adding UI assets. Self-hosted external CSS can be allowed narrowly without broadening inline-script permissions.
 
+## Learning note: opting into a local Gemma planner
+
+The offline provider is still deterministic by default. It hashes text for placeholder embeddings, returns a canned chat answer, passes retrieval candidates through without model ranking, and creates a single-query agent plan without calling a model. Those pieces make tests and a credential-free demo predictable, but they are not semantic AI services. The local Gemma change is deliberately narrow: setting `RAG_OFFLINE_AGENT_PLANNER=ollama` replaces only the agent planner. It does not silently turn the rest of the app into an AI-backed provider.
+
+An agent plan is a small JSON object, not permission to run arbitrary code. The planner receives the question and a bounded list of IDs, filenames, and file types from the active workspace. It proposes up to three search strings and may nominate two listed files for comparison. The existing service remains responsible for validating those choices, enforcing workspace boundaries, and calling only its read-only search and comparison operations. The Ollama adapter asks `/api/chat` for JSON-schema-constrained output, then the shared structured planner validates the response again, including exact fields, JSON types, bounds, duplicate keys, and trailing data. Model-side schema mode helps generation conform; server-side validation is still the enforcement point.
+
+The configured Ollama endpoint receives the question and file metadata, not document contents. The default URL `http://host.docker.internal:11434` is meant for the application running in Docker Desktop to reach an Ollama service on the host. A natively run app usually needs `http://localhost:11434`; other Docker hosts may require a different host address and Ollama network configuration. If the endpoint is overridden, requests go to that configured destination, so keep it trusted. The model name and timeout can be changed through `RAG_OFFLINE_AGENT_PLANNER_MODEL` and `RAG_OFFLINE_AGENT_PLANNER_TIMEOUT_MS`. Pull the model in Ollama before enabling the option.
+
+If Ollama cannot be reached or returns an HTTP failure, the planner raises a specific unavailable error and the API returns `503 Service Unavailable`. It does not quietly use the deterministic planner, because that would make a request appear successful while doing materially different planning. A malformed or schema-invalid model response remains a `502 Bad Gateway`, distinguishing a service outage from an upstream response that the application cannot safely accept. Pipeline information identifies the configured planner model but is not a health probe.
+
+### Transferable lessons
+
+- Make optional model-backed behavior explicit in configuration and keep its blast radius small.
+- Use a model's structured-output feature as a generation aid, then validate the exact response independently on the server.
+- Keep authorization and tool execution in ordinary application code; a planner only proposes bounded input.
+- Distinguish an unavailable model service from invalid model output, and do not conceal either with an automatic deterministic fallback.
+- Document which request data reaches a model endpoint and how containers reach a host service; “offline” describes the provider configuration, not a guarantee if an operator points the local adapter at a remote URL.
+
 ## Learning note: who selects the LLM harness and tools
 
 The model does not independently choose its harness or gain access to tools. The developer chooses a model and implements the surrounding harness: prompt construction, the list of permitted actions, argument validation, authorization checks, and the loop that decides whether to execute a requested action and send a result back. A helpful analogy is a menu: the model may select among presented options, but the application decides what is on the menu, checks the order, and performs it. This distinction is essential because a prompt telling a model not to do something is not an enforcement mechanism.
