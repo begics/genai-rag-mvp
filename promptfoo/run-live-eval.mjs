@@ -187,36 +187,49 @@ try {
 } finally {
   if (workspaceId) {
     for (const key of uploadedKeys) {
-      try {
-        const csrf = await session.get('/api/csrf');
-        const response = await session.fetch(
-          new URL(`/api/uploads?${new URLSearchParams({ key })}`, session.appUrl),
-          {
-            method: 'DELETE',
-            headers: {
-              'X-XSRF-TOKEN': csrf.token,
-              'X-Workspace-ID': workspaceId,
+      let deletionError;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const csrf = await session.get('/api/csrf');
+          const response = await session.fetch(
+            new URL(`/api/uploads?${new URLSearchParams({ key })}`, session.appUrl),
+            {
+              method: 'DELETE',
+              headers: {
+                'X-XSRF-TOKEN': csrf.token,
+                'X-Workspace-ID': workspaceId,
+              },
             },
-          },
-        );
-        if (response.status !== 204) {
-          throw new Error(`Could not delete a synthetic uploaded object (HTTP ${response.status}).`);
+          );
+          if (response.status !== 204) {
+            throw new Error(`Could not delete a synthetic uploaded object (HTTP ${response.status}).`);
+          }
+          deletionError = undefined;
+          break;
+        } catch (error) {
+          deletionError = error;
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+          }
         }
+      }
+      if (deletionError) cleanupError = deletionError;
+    }
+    if (!cleanupError) {
+      try {
+        runPsql([
+          'BEGIN;',
+          `DELETE FROM indexing_jobs WHERE workspace_id = '${workspaceId}'::uuid;`,
+          `DELETE FROM documents WHERE workspace_id = '${workspaceId}'::uuid;`,
+          `DELETE FROM workspaces WHERE id = '${workspaceId}'::uuid AND name = '${workspaceName}';`,
+          'COMMIT;',
+        ].join('\n'));
+        console.log('Removed temporary Promptfoo workspace records.');
       } catch (error) {
         cleanupError = error;
       }
-    }
-    try {
-      runPsql([
-        'BEGIN;',
-        `DELETE FROM indexing_jobs WHERE workspace_id = '${workspaceId}'::uuid;`,
-        `DELETE FROM documents WHERE workspace_id = '${workspaceId}'::uuid;`,
-        `DELETE FROM workspaces WHERE id = '${workspaceId}'::uuid AND name = '${workspaceName}';`,
-        'COMMIT;',
-      ].join('\n'));
-      console.log('Removed temporary Promptfoo workspace records.');
-    } catch (error) {
-      cleanupError = error;
+    } else {
+      console.error('Skipping temporary workspace cleanup because an uploaded object could not be deleted.');
     }
   }
 }
