@@ -351,7 +351,9 @@ class SecurityConfigurationTest {
     org.assertj.core.api.Assertions.assertThat(html)
         .contains("The application developer selects the model and defines the harness")
         .contains("Offline mode uses one fixed search query unless the optional local Ollama planner is explicitly enabled")
-        .contains("Regular chat bypasses the agent planner");
+        .contains("Regular chat bypasses the agent planner")
+        .contains("description.id = \"empty-description\"")
+        .contains("suggestions.id = \"suggestions\"");
     String demo;
     try (var stream = getClass().getResourceAsStream("/static/demo.html")) {
       org.assertj.core.api.Assertions.assertThat(stream).isNotNull();
