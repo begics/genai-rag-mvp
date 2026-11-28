@@ -37,7 +37,7 @@ class InfomaniakDocumentRiskScreeningTest {
     ArgumentCaptor<String> schema = ArgumentCaptor.forClass(String.class);
     verify(chat).answerWithSchema(instructions.capture(), org.mockito.ArgumentMatchers.eq(text), schema.capture());
     assertThat(instructions.getValue())
-        .contains("untrusted data", "fraud/not-fraud verdict", "missing", "application derives it");
+        .contains("untrusted data", "fraud/not-fraud verdict", "missing", "application matches");
     assertThat(schema.getValue()).contains("\"evidence\"", "\"uncertainty\"")
         .doesNotContain("\"location\"")
         .doesNotContain("riskLevel", "\"summary\"");
@@ -201,6 +201,23 @@ class InfomaniakDocumentRiskScreeningTest {
     verify(chat).answerWithSchema(org.mockito.ArgumentMatchers.anyString(),
         org.mockito.ArgumentMatchers.eq(text), schema.capture());
     assertThat(schema.getValue()).doesNotContain("\"location\"");
+  }
+
+  @Test
+  void matchesPdfEvidenceAcrossLineWrappingAndReturnsTheExtractedQuotation() {
+    String text = "Title\n\fDie Studien-\nordnung regelt\n die Anmeldung.";
+    when(chat.answerWithSchema(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(text),
+        org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn("""
+            {"findings":[{"category":"OTHER","evidence":"Studienordnung regelt die Anmeldung.",
+             "uncertainty":"The requirement's context is not established."}]}
+            """);
+
+    var result = screening.evaluate(text);
+
+    assertThat(result.findings().getFirst().evidence())
+        .isEqualTo("Studien-\nordnung regelt\n die Anmeldung.");
+    assertThat(result.findings().getFirst().location()).isEqualTo("Page 2, line 1");
   }
 
   @Test
