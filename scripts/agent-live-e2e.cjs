@@ -21,6 +21,9 @@ function requiredEnv(name) {
 
 async function authenticatedPage(browser) {
   const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
+  page.on("console", (message) => {
+    if (message.type() === "error") console.error(`Browser console error: ${message.text()}`);
+  });
   page.on("pageerror", (error) => {
     console.error(`Browser page error: ${error.message}`);
   });
@@ -153,25 +156,6 @@ async function cleanupSyntheticFile(page, workspaceId) {
     )
   ) {
     throw new Error("Cannot safely delete the test file while its indexing job is active.");
-  }
-
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator("#workspace-select:not([disabled])").waitFor({ timeout: 30_000 });
-  await page.locator("#workspace-select").selectOption(workspaceId);
-  const fileRow = page.locator("#indexed-file-list .file-row").filter({ hasText: filename });
-  if (await fileRow.count()) {
-    page.once("dialog", (dialog) => dialog.accept());
-    await fileRow.getByRole("button", { name: "Delete" }).click();
-    await page.waitForFunction(
-      async (targetFilename) => {
-        const response = await fetch("/api/storage");
-        if (!response.ok) return false;
-        const storage = await response.json();
-        return storage.files.every((file) => file.filename !== targetFilename);
-      },
-      filename,
-      { timeout: 30_000 },
-    );
   }
 
   const remainingArtifacts = async () => {
