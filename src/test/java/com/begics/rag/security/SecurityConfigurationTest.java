@@ -221,9 +221,15 @@ class SecurityConfigurationTest {
         .andExpect(status().isOk())
         .andExpect(forwardedUrl("/index.html"));
     mvc.perform(get("/demo.css")).andExpect(status().isOk());
+    mvc.perform(get("/rag-flow.css")).andExpect(status().isOk());
     mvc.perform(get("/demo.js"))
         .andExpect(status().isOk())
         .andExpect(content().string(org.hamcrest.Matchers.containsString("Prepared sample response")));
+    mvc.perform(get("/demo.html"))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString(
+            "Where token generation fits in a RAG answer")))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString(
+            "Brij Pandey’s LinkedIn post on token-by-token generation")));
     mvc.perform(get("/api/documents")).andExpect(status().isUnauthorized());
   }
 
@@ -335,6 +341,10 @@ class SecurityConfigurationTest {
         .contains("data-pipeline-model=\"chat-summary\"")
         .contains("data-pipeline-model=\"planner-summary\"")
         .contains("the planner model plans; the chat model answers and extracts invoice fields");
+    org.assertj.core.api.Assertions.assertThat(html)
+        .contains("From retrieved evidence to a checked answer")
+        .contains("This app receives complete provider responses rather than streaming visible tokens")
+        .contains("Brij Pandey’s LinkedIn post on token-by-token generation");
   }
 
   @Test

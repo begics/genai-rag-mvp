@@ -69,3 +69,23 @@ Existing Java tests cover evidence and location validation, prompt-injection han
 - A durable queue can outlive the capacity of an in-memory executor. Recovery should leave overflow work durable, retry it when capacity returns, and track submissions to avoid filling the executor with duplicate attempts.
 - When a request and recovery scheduler can dispatch the same durable item concurrently, the reservation must cover both queue admission and rejection handling; otherwise a request can report acceptance even though its submission was rejected.
 - A timeout checked only between polling requests is not an end-to-end deadline. Carry one deadline through submit, each bounded request, sleeps, and final download.
+
+## Learning note: showing token generation inside RAG
+
+The linked LinkedIn post explains that a language model processes a prompt, scores possible next tokens, chooses a token, and repeats until it has an answer. That is a useful model-internals lesson, but it is not the whole story for this application: a RAG system first checks workspace access and retrieves passages, then supplies a selection of those passages alongside the question. Once the model has drafted its answer, application logic checks grounding and returns source references. The distinction matters because a fluent model response and a relevant-looking citation do not independently prove a claim.
+
+The demo and signed-in UI now use the same original, responsive six-step diagram: scope the question, retrieve context, prefill the prompt, decode tokens, check grounding outside the model, and return the answer with sources. It explains the prefill/decode split and the role of KV caching without pretending that this application streams visible tokens; the current UI receives the provider's completed response. The diagram is inserted into the existing architecture explanations rather than the chat composer, so it remains optional system detail and does not compete with the user's main task.
+
+The design is intentionally an original HTML/CSS flow, not a downloaded or redrawn copy of the LinkedIn artwork. This avoids turning somebody else's graphic into an app asset while still teaching the underlying idea. The figure credits and links to the author's post; separating inspiration from copied expression is a practical way to respect creator attribution and keep the new visual specific to this application's retrieval, authorization, and validation stages.
+
+One shared stylesheet supplies the same visual rules on the public demo and private workspace. Keeping the diagram in semantic HTML (an ordered list with meaningful headings and descriptions) lets it reflow into a compact two-column layout on phones, remain selectable text, and work with assistive technology. It also avoids adding a raster image, third-party image request, JavaScript rendering dependency, or a new inline script/style block. The signed-in page uses a self-hosted stylesheet permitted by the existing Content Security Policy, so the hash-authorized inline UI code does not need to be weakened or recalculated.
+
+The test addition checks that the public demo can load the shared stylesheet and exposes the conceptual diagram and source attribution. The existing security test verifies inline CSP hashes against the actual signed-in HTML, which should continue passing because the change only adds markup outside the inline blocks. A useful next validation is to open both pages at desktop and mobile widths and confirm that the optional diagram wraps without horizontal scrolling; a source-level test alone cannot prove visual balance.
+
+### Transferable lessons
+
+- Explain systems at the boundary between components: retrieval is an application step, generation is a model step, and grounding/citation checks happen outside the model.
+- Label conceptual visuals honestly. Do not imply that token-level internals are a live trace or that citations guarantee factual correctness.
+- When adapting a linked graphic, preserve the idea in an original composition, credit the inspiration, and avoid reusing the underlying image without permission.
+- A shared semantic structure is often more responsive and accessible than embedding a fixed-size infographic; keep the visual decoration separate from the meaning.
+- Check Content Security Policy when adding UI assets. Self-hosted external CSS can be allowed narrowly without broadening inline-script permissions.

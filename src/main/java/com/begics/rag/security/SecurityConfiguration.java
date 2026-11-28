@@ -64,7 +64,7 @@ public class SecurityConfiguration {
             .ignoringRequestMatchers(SecurityConfiguration::isBearerRequest))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(authorize -> authorize
-            .requestMatchers("/", "/index.html", "/demo.html", "/demo.css", "/demo.js", "/favicon.ico",
+            .requestMatchers("/", "/index.html", "/demo.html", "/demo.css", "/demo.js", "/rag-flow.css", "/favicon.ico",
                 "/actuator/health", "/actuator/health/**", "/oauth2/**", "/login/**").permitAll()
             .anyRequest().authenticated())
         .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(

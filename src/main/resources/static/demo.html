@@ -7,6 +7,7 @@
   <meta name="description" content="Learn how retrieval-augmented generation, search, guardrails, tools, and MCP fit together.">
   <title>AI Knowledge Assistant · Demo</title>
   <link rel="stylesheet" href="/demo.css">
+  <link rel="stylesheet" href="/rag-flow.css">
 </head>
 <body>
   <header class="topbar">
@@ -204,6 +205,24 @@
         <span class="mode-badge">Illustrative architecture</span>
       </div>
       <p class="pipeline-intro">A live assistant prepares documents once, then retrieves the most useful evidence for each question. Each step solves a different problem; skip one and answers can become harder to find, less reliable, or impossible to verify.</p>
+      <figure class="rag-visual" aria-labelledby="demo-rag-visual-title">
+        <div class="rag-visual-heading">
+          <div>
+            <h3 id="demo-rag-visual-title">Where token generation fits in a RAG answer</h3>
+            <p>Retrieval supplies evidence; the model still generates its response one token at a time.</p>
+          </div>
+          <span class="rag-visual-tag">Conceptual flow</span>
+        </div>
+        <ol class="rag-steps" aria-label="Question-to-answer generation flow">
+          <li class="rag-step"><strong>Scope the question</strong><small>Check the signed-in user and active workspace before searching.</small></li>
+          <li class="rag-step"><strong>Retrieve context</strong><small>Hybrid search and reranking select passages relevant to the question.</small></li>
+          <li class="rag-step"><strong>Prefill the prompt</strong><small>The model reads the question and selected evidence together.</small></li>
+          <li class="rag-step"><strong>Decode the answer</strong><small>Score possible next tokens, choose one, append it, and repeat. KV cache reuses prior attention state.</small></li>
+          <li class="rag-step"><strong>Check outside the model</strong><small>The application checks grounding and connects the answer to retrieved sources.</small></li>
+          <li class="rag-step"><strong>Return answer + sources</strong><small>Readers can inspect the quoted passages; a citation is a lead, not proof.</small></li>
+        </ol>
+        <figcaption>Conceptual explanation, not a live trace. This app receives complete provider responses rather than streaming visible tokens. Inspired by <a href="https://www.linkedin.com/posts/brijpandeyji_every-answer-an-llm-gives-you-is-built-one-activity-7532311276233060352-6Pur" target="_blank" rel="noopener noreferrer">Brij Pandey’s LinkedIn post on token-by-token generation</a>; this RAG-specific diagram is original.</figcaption>
+      </figure>
       <div class="flow-lane">
         <h3><span>01</span> Prepare knowledge · indexing happens when documents are added</h3>
         <ol class="flow">

@@ -1,0 +1,37 @@
+.rag-visual {
+  margin: 18px 0 0;
+  padding: 18px;
+  border: 1px solid #e2e8f4;
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse at 10% 0%, #edf2ff 0, transparent 42%),
+    #fbfcff;
+}
+.rag-visual-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.rag-visual-heading h3 { margin: 0; color: #283b66; font-size: .86rem; }
+.rag-visual-heading p { margin: 5px 0 0; color: #718096; font-size: .68rem; line-height: 1.5; }
+.rag-visual-tag { padding: 5px 8px; border: 1px solid #dfe6f5; border-radius: 999px; color: #53647b; background: #fff; font-size: .6rem; white-space: nowrap; }
+.rag-steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; margin: 16px 0 0; padding: 0; list-style: none; counter-reset: rag-step; }
+.rag-step { position: relative; min-width: 0; min-height: 130px; padding: 12px 10px; border: 1px solid #e0e6f0; border-radius: 10px; background: #fff; counter-increment: rag-step; }
+.rag-step:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -15px; z-index: 1; color: #7890c8; font-size: 1rem; font-weight: 750; transform: translate(50%, -50%); }
+.rag-step::before { content: "0" counter(rag-step); display: grid; width: 23px; height: 23px; margin-bottom: 10px; place-items: center; border-radius: 7px; color: #315ee8; background: #eaf0ff; font-size: .57rem; font-weight: 780; }
+.rag-step:nth-child(3), .rag-step:nth-child(4) { border-color: #d7defa; background: #f7f8ff; }
+.rag-step:nth-child(5) { border-color: #d4e8df; background: #f7fcf9; }
+.rag-step strong, .rag-step small { display: block; }
+.rag-step strong { color: #354359; font-size: .68rem; line-height: 1.35; }
+.rag-step small { margin-top: 6px; color: #718096; font-size: .61rem; line-height: 1.5; }
+.rag-visual figcaption { margin-top: 12px; color: #7a8798; font-size: .62rem; line-height: 1.55; }
+.rag-visual figcaption a { color: #3155bd; text-underline-offset: 2px; }
+@media (max-width: 1100px) {
+  .rag-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .rag-step { min-height: 115px; }
+  .rag-step:not(:last-child)::after { display: none; }
+}
+@media (max-width: 560px) {
+  .rag-visual { padding: 13px; }
+  .rag-visual-heading { flex-direction: column; }
+  .rag-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .rag-step { min-height: 126px; padding: 10px 9px; }
+  .rag-step strong { font-size: .66rem; }
+  .rag-step small { font-size: .6rem; }
+}
